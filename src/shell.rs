@@ -24,14 +24,15 @@ use crate::core::effect::{
     Effect, EffectPlan, EventConflictResolution, FileContents, FileWriteEffect, ModelContentDigest,
     ProcessInvocation, ProcessInvocations, ProjectPath, ProjectionFingerprint, ReportLine,
     ReviewEventReference, ReviewRecordRequirement, SliceAutomationDefinitionRemovalEffect,
-    SliceCommandDefinitionRemovalEffect, SliceDescriptionUpdateEffect,
-    SliceEventDefinitionRemovalEffect, SliceExternalPayloadDefinitionRemovalEffect,
-    SliceKindUpdateEffect, SliceNameUpdateEffect, SliceOutcomeDefinitionRemovalEffect,
-    SliceReadModelDefinitionRemovalEffect, SliceScenarioRemovalEffect,
-    SliceTranslationDefinitionRemovalEffect, SliceViewControlRemovalEffect,
-    SliceViewControlUpdateEffect, SliceViewDefinitionRemovalEffect, WorkflowCommandErrorEffect,
-    WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect,
-    WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
+    SliceBoardElementRemovalEffect, SliceCommandDefinitionRemovalEffect,
+    SliceDescriptionUpdateEffect, SliceEventDefinitionRemovalEffect,
+    SliceExternalPayloadDefinitionRemovalEffect, SliceKindUpdateEffect, SliceNameUpdateEffect,
+    SliceOutcomeDefinitionRemovalEffect, SliceReadModelDefinitionRemovalEffect,
+    SliceScenarioRemovalEffect, SliceTranslationDefinitionRemovalEffect,
+    SliceViewControlRemovalEffect, SliceViewControlUpdateEffect, SliceViewDefinitionRemovalEffect,
+    WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect,
+    WorkflowNameUpdateEffect, WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect,
+    WorkflowTransitionEvidenceEffect,
 };
 use crate::core::event_runtime::{
     ProjectRuntimeLock, ensure_event_store, execute_eventcore_command_for_exported_event,
@@ -335,6 +336,8 @@ fn effect_is_mutation(effect: &Effect) -> bool {
             | Effect::AddBitLevelDataFlowFromSlice(_)
             | Effect::AddBoardConnectionFromSlice(_)
             | Effect::AddBoardElementFromSlice(_)
+            | Effect::RemoveBoardElementFromSlice(_)
+            | Effect::UpdateBoardElementFromSlice(_)
             | Effect::AddCommandDefinitionFromSlice(_)
             | Effect::AddEventDefinitionFromSlice(_)
             | Effect::AddExternalPayloadDefinitionFromSlice(_)
@@ -500,6 +503,8 @@ fn interpret_slice_fact_effect(effect: &Effect) -> Option<Result<Vec<String>, Sh
             interpret_board_connection_added(connection)
         }
         Effect::AddBoardElementFromSlice(element) => interpret_board_element_added(element),
+        Effect::RemoveBoardElementFromSlice(removal) => interpret_board_element_removed(removal),
+        Effect::UpdateBoardElementFromSlice(element) => interpret_board_element_updated(element),
         Effect::AddCommandDefinitionFromSlice(command) => {
             interpret_command_definition_added(command)
         }
@@ -729,6 +734,46 @@ fn interpret_board_element_added(element: &NewBoardElement) -> Result<Vec<String
         element.slice_slug(),
         reports,
         EventDraft::slice_board_element_added(element),
+    )
+}
+
+fn interpret_board_element_updated(element: &NewBoardElement) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "updated board element {} on slice {}",
+            element.name().as_ref(),
+            element.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "updated board element {} in project root",
+            element.name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        element.slice_slug(),
+        reports,
+        EventDraft::slice_board_element_updated(element),
+    )
+}
+
+fn interpret_board_element_removed(
+    removal: &SliceBoardElementRemovalEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "removed board element {} from slice {}",
+            removal.element_name().as_ref(),
+            removal.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "removed board element {} from project root",
+            removal.element_name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        removal.slice_slug(),
+        reports,
+        EventDraft::slice_board_element_removed(removal.slice_slug(), removal.element_name()),
     )
 }
 

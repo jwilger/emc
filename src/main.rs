@@ -37,13 +37,14 @@ use crate::core::modeling_enums::MODELING_ENUMS;
 use crate::core::project::ProjectName;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    AutomationName, CommandInputSourceKind, CommandName, ControlName, ControlRecoveryBehavior,
-    EventAttributeSourceField, EventAttributeSourceName, EventName, ModelDescription, ModelName,
-    OutcomeLabelName, ReadModelFieldSourceKind, ReadModelName, ReviewTimestamp, ReviewerId,
-    ScenarioName, SketchToken, SliceSlug, TranslationName, ViewName, WorkflowCommandErrorRecord,
-    WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord,
-    WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionEvidenceNavigationEndpoints,
-    WorkflowTransitionEvidenceRecord, WorkflowTransitionKind,
+    AutomationName, BoardElementName, CommandInputSourceKind, CommandName, ControlName,
+    ControlRecoveryBehavior, EventAttributeSourceField, EventAttributeSourceName, EventName,
+    ModelDescription, ModelName, OutcomeLabelName, ReadModelFieldSourceKind, ReadModelName,
+    ReviewTimestamp, ReviewerId, ScenarioName, SketchToken, SliceSlug, TranslationName, ViewName,
+    WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
+    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
+    WorkflowTransitionEvidenceNavigationEndpoints, WorkflowTransitionEvidenceRecord,
+    WorkflowTransitionKind,
 };
 use crate::core::workflow::NewWorkflow;
 use crate::io::dto::{
@@ -101,6 +102,13 @@ enum Command {
     },
     AddBoardElement {
         element: NewBoardElement,
+    },
+    UpdateBoardElement {
+        element: NewBoardElement,
+    },
+    RemoveBoardElement {
+        slice_slug: SliceSlug,
+        element_name: BoardElementName,
     },
     AddCommandDefinition {
         command: NewCommandDefinition,
@@ -325,6 +333,9 @@ fn run(cli: Cli) -> Result<(), ShellError> {
             interpret(&command::add_board_connection(connection))
         }
         Command::AddBoardElement { element } => interpret(&command::add_board_element(element)),
+        Command::UpdateBoardElement { element } => {
+            interpret(&command::update_board_element(element))
+        }
         Command::AddCommandDefinition {
             command: definition,
         } => interpret(&command::add_command_definition(definition)),
@@ -458,6 +469,12 @@ fn run_mutation_commands(command: Command) -> Result<(), ShellError> {
             reviewer,
             reviewed_at,
         } => interpret(&command::record_clean_review(slug, reviewer, reviewed_at)),
+        other => run_definition_removal_commands(other),
+    }
+}
+
+fn run_definition_removal_commands(command: Command) -> Result<(), ShellError> {
+    match command {
         Command::RemoveCommandDefinition {
             slice_slug,
             command_name,
@@ -465,6 +482,10 @@ fn run_mutation_commands(command: Command) -> Result<(), ShellError> {
             slice_slug,
             command_name,
         )),
+        Command::RemoveBoardElement {
+            slice_slug,
+            element_name,
+        } => interpret(&command::remove_board_element(slice_slug, element_name)),
         Command::RemoveEventDefinition {
             slice_slug,
             event_name,
@@ -524,6 +545,12 @@ fn run_mutation_commands(command: Command) -> Result<(), ShellError> {
             slice_slug,
             scenario_name,
         } => interpret(&command::remove_slice_scenario(slice_slug, scenario_name)),
+        other => run_remaining_mutation_commands(other),
+    }
+}
+
+fn run_remaining_mutation_commands(command: Command) -> Result<(), ShellError> {
+    match command {
         Command::RemoveTransition { removal } => interpret(&command::remove_transition(removal)),
         Command::RemoveWorkflow { slug } => interpret(&command::remove_workflow(slug)),
         Command::ResolveConflict {
@@ -2647,7 +2674,7 @@ fn parse_cli_20(arguments: &[String]) -> Result<Cli, ShellError> {
             declared_name,
             main_path_flag,
             main_path,
-        ] if command == "add"
+        ] if (command == "add" || command == "update")
             && subject == "board-element"
             && slice_flag == "--slice"
             && name_flag == "--name"
@@ -2667,16 +2694,33 @@ fn parse_cli_20(arguments: &[String]) -> Result<Cli, ShellError> {
             let declared_name = parse_board_element_declared_name(declared_name)
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let main_path = parse_bool_flag(main_path)?;
+            let element = NewBoardElement::new(
+                slice_slug,
+                element_name,
+                element_kind,
+                lane_id,
+                declared_name,
+                main_path,
+            );
+            let command = if command == "add" {
+                Command::AddBoardElement { element }
+            } else {
+                Command::UpdateBoardElement { element }
+            };
+            Ok(Cli { command })
+        }
+        [command, subject, slice_flag, slice, name_flag, name]
+            if command == "remove"
+                && subject == "board-element"
+                && slice_flag == "--slice"
+                && name_flag == "--name" =>
+        {
             Ok(Cli {
-                command: Command::AddBoardElement {
-                    element: NewBoardElement::new(
-                        slice_slug,
-                        element_name,
-                        element_kind,
-                        lane_id,
-                        declared_name,
-                        main_path,
-                    ),
+                command: Command::RemoveBoardElement {
+                    slice_slug: parse_slice_slug(slice)
+                        .map_err(|error| ShellError::message(error.to_string()))?,
+                    element_name: parse_board_element_name(name)
+                        .map_err(|error| ShellError::message(error.to_string()))?,
                 },
             })
         }

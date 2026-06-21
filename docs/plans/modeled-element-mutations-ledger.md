@@ -34,16 +34,20 @@ This ledger tracks #159 across multiple PRs.
 - PR #184: added event-sourced CLI and MCP update/remove support for
   translation definitions. Covers behavior through synchronized Lean4/Quint
   artifact assertions for both CLI and MCP entry points.
-- Current branch: adds event-sourced CLI and MCP update/remove support for
+- PR #186: added event-sourced CLI and MCP update/remove support for
   external payload definitions. Covers behavior through synchronized Lean4/Quint
+  artifact assertions for both CLI and MCP entry points.
+- Current branch: adds event-sourced CLI and MCP update/remove support for
+  board elements. Covers behavior through synchronized Lean4/Quint
   artifact assertions for both CLI and MCP entry points.
 
 ## Current PR boundary
 
 - This PR should broaden beyond scenarios, commands, events, read models, views,
-  controls, outcomes, automations, and translations to external payload
-  definitions without closing #159. Keep #159 open until all modeled element
-  families listed in the issue have CLI and MCP update/remove coverage.
+  controls, outcomes, automations, translations, and external payload
+  definitions to board elements without closing #159. Keep #159 open until all
+  modeled element families listed in the issue have CLI and MCP update/remove
+  coverage.
 
 ## Remaining modeled element targets
 
@@ -56,9 +60,9 @@ This ledger tracks #159 across multiple PRs.
 - Slice-owned definitions: commands are covered by PR #170, events are covered
   by PR #172, read models are covered by PR #174, views are covered by PR #176,
   controls are covered by PR #178, outcomes are covered by PR #180, automations
-  are covered by PR #182, translations are covered by PR #184, and external
-  payloads are covered by the current branch. Remaining families are board
-  elements, board connections, and data-flow facts.
+  are covered by PR #182, translations are covered by PR #184, external
+  payloads are covered by PR #186, and board elements are covered by the current
+  branch. Remaining families are board connections and data-flow facts.
 - Scenario follow-up: add tests for contract scenario update/remove if needed by
   final completion evidence.
 
@@ -87,8 +91,10 @@ This ledger tracks #159 across multiple PRs.
 - `cargo test --test mcp_stdio translation_definition`
 - `cargo test --test update_slice external_payload_definition`
 - `cargo test --test mcp_stdio external_payload_definition`
+- `cargo test --test update_slice board_element`
+- `cargo test --test mcp_stdio board_element`
 
 ## Next likely increment
 
-Extend the same update/remove pattern to board elements, then continue through
-the remaining slice-owned definition families.
+Extend the same update/remove pattern to board connections, then continue
+through data-flow facts.

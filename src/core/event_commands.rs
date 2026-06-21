@@ -20,11 +20,11 @@ use crate::core::formal_slice_facts::{
 use crate::core::project::ProjectName;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    AutomationName, CommandErrorName, CommandName, ControlName, EventAttributeSourceField,
-    EventAttributeSourceName, EventName, ModelDescription, ModelName, OutcomeLabelName,
-    PayloadContractName, ReadModelName, ReviewRuleName, ReviewTimestamp, ReviewerId, ScenarioName,
-    SliceKindName, SliceSlug, StreamName, TransitionTriggerName, TranslationName, ViewName,
-    WorkflowCommandErrorRecord, WorkflowEntryLifecycleEvidenceText,
+    AutomationName, BoardElementName, CommandErrorName, CommandName, ControlName,
+    EventAttributeSourceField, EventAttributeSourceName, EventName, ModelDescription, ModelName,
+    OutcomeLabelName, PayloadContractName, ReadModelName, ReviewRuleName, ReviewTimestamp,
+    ReviewerId, ScenarioName, SliceKindName, SliceSlug, StreamName, TransitionTriggerName,
+    TranslationName, ViewName, WorkflowCommandErrorRecord, WorkflowEntryLifecycleEvidenceText,
     WorkflowEntryLifecycleStateName, WorkflowEntryLifecycleStateRecord, WorkflowEventParticipation,
     WorkflowOutcomeRecord, WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName,
     WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
@@ -184,6 +184,16 @@ pub(crate) enum EmcEvent {
         #[serde(flatten)]
         automation: SliceAutomationDefinitionRemovalEvent,
     },
+    SliceBoardElementUpdated {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        element: SliceBoardElementUpdateEvent,
+    },
+    SliceBoardElementRemoved {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        element: SliceBoardElementRemovalEvent,
+    },
     SliceTranslationDefinitionUpdated {
         stream_id: StreamId,
         #[serde(flatten)]
@@ -311,6 +321,8 @@ impl Event for EmcEvent {
             | Self::SliceFactAdded { stream_id, .. }
             | Self::SliceAutomationDefinitionUpdated { stream_id, .. }
             | Self::SliceAutomationDefinitionRemoved { stream_id, .. }
+            | Self::SliceBoardElementUpdated { stream_id, .. }
+            | Self::SliceBoardElementRemoved { stream_id, .. }
             | Self::SliceTranslationDefinitionUpdated { stream_id, .. }
             | Self::SliceTranslationDefinitionRemoved { stream_id, .. }
             | Self::SliceExternalPayloadDefinitionUpdated { stream_id, .. }
@@ -918,6 +930,173 @@ impl CommandLogic for AddSliceFactCommand {
             fact: SliceFactEvent::new(self.fact.clone()),
         }]
         .into())
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct UpdateBoardElementCommand {
+    #[stream]
+    slice_stream: StreamId,
+    element: NewBoardElement,
+}
+
+impl UpdateBoardElementCommand {
+    pub(crate) fn new(element: NewBoardElement) -> Result<Self, String> {
+        Ok(Self {
+            slice_stream: slice_stream_id(element.slice_slug().as_ref())?,
+            element,
+        })
+    }
+}
+
+impl CommandLogic for UpdateBoardElementCommand {
+    type Event = EmcEvent;
+    type State = SliceCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_slice_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "slice stream must exist before updating board element"
+        );
+        Ok(vec![EmcEvent::SliceBoardElementUpdated {
+            stream_id: self.slice_stream.clone(),
+            element: SliceBoardElementUpdateEvent::new(self.element.clone()),
+        }]
+        .into())
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct RemoveBoardElementCommand {
+    #[stream]
+    slice_stream: StreamId,
+    slice: SliceSlug,
+    name: BoardElementName,
+}
+
+impl RemoveBoardElementCommand {
+    pub(crate) fn new(slice: SliceSlug, name: BoardElementName) -> Result<Self, String> {
+        Ok(Self {
+            slice_stream: slice_stream_id(slice.as_ref())?,
+            slice,
+            name,
+        })
+    }
+}
+
+impl CommandLogic for RemoveBoardElementCommand {
+    type Event = EmcEvent;
+    type State = SliceCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_slice_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "slice stream must exist before removing board element"
+        );
+        Ok(vec![EmcEvent::SliceBoardElementRemoved {
+            stream_id: self.slice_stream.clone(),
+            element: SliceBoardElementRemovalEvent::new(self.slice.clone(), self.name.clone()),
+        }]
+        .into())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceBoardElementUpdateEvent {
+    element: NewBoardElement,
+}
+
+impl SliceBoardElementUpdateEvent {
+    pub(crate) fn new(element: NewBoardElement) -> Self {
+        Self { element }
+    }
+
+    pub(crate) fn element(&self) -> NewBoardElement {
+        self.element.clone()
+    }
+}
+
+impl Serialize for SliceBoardElementUpdateEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::slice_board_element_updated(&self.element)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for SliceBoardElementUpdateEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::SliceBoardElementUpdated { element } => Ok(Self::new(element)),
+            other => Err(DeserializeError::custom(format!(
+                "expected SliceBoardElementUpdated event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceBoardElementRemovalEvent {
+    slice: SliceSlug,
+    name: BoardElementName,
+}
+
+impl SliceBoardElementRemovalEvent {
+    pub(crate) fn new(slice: SliceSlug, name: BoardElementName) -> Self {
+        Self { slice, name }
+    }
+
+    pub(crate) fn slice(&self) -> &SliceSlug {
+        &self.slice
+    }
+
+    pub(crate) fn name(&self) -> &BoardElementName {
+        &self.name
+    }
+}
+
+impl Serialize for SliceBoardElementRemovalEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::slice_board_element_removed(&self.slice, &self.name)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for SliceBoardElementRemovalEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::SliceBoardElementRemoved { slice, name } => {
+                Ok(Self::new(slice, name))
+            }
+            other => Err(DeserializeError::custom(format!(
+                "expected SliceBoardElementRemoved event body, got {}",
+                other.event_type()
+            ))),
+        }
     }
 }
 
