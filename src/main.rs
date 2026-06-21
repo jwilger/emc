@@ -3988,7 +3988,7 @@ fn parse_cli_28(arguments: &[String]) -> Result<Cli, ShellError> {
             when,
             then_flag,
             then,
-        ] if command == "add"
+        ] if (command == "add" || command == "update")
             && subject == "scenario"
             && slice_flag == "--slice"
             && kind_flag == "--kind"
@@ -4043,7 +4043,7 @@ fn parse_cli_28(arguments: &[String]) -> Result<Cli, ShellError> {
                 parse_basic_scenario(slice_slug, scenario_kind, name, given, when, then)?
                     .with_streams(read_streams, written_streams);
             Ok(Cli {
-                command: Command::AddSliceScenario { scenario },
+                command: slice_scenario_command(command, scenario),
             })
         }
         _ => parse_cli_29(arguments),
@@ -4071,7 +4071,7 @@ fn parse_cli_29(arguments: &[String]) -> Result<Cli, ShellError> {
             contract_kind,
             covered_definition_flag,
             covered_definition,
-        ] if command == "add"
+        ] if (command == "add" || command == "update")
             && subject == "scenario"
             && slice_flag == "--slice"
             && kind_flag == "--kind"
@@ -4103,18 +4103,17 @@ fn parse_cli_29(arguments: &[String]) -> Result<Cli, ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let covered_definition = parse_covered_definition_name(covered_definition)
                 .map_err(|error| ShellError::message(error.to_string()))?;
+            let scenario = NewSliceScenario::new_contract(
+                slice_slug,
+                name,
+                given,
+                when,
+                then,
+                contract_kind,
+                covered_definition,
+            );
             Ok(Cli {
-                command: Command::AddSliceScenario {
-                    scenario: NewSliceScenario::new_contract(
-                        slice_slug,
-                        name,
-                        given,
-                        when,
-                        then,
-                        contract_kind,
-                        covered_definition,
-                    ),
-                },
+                command: slice_scenario_command(command, scenario),
             })
         }
         _ => parse_cli_30(arguments),
@@ -4144,7 +4143,7 @@ fn parse_cli_30(arguments: &[String]) -> Result<Cli, ShellError> {
             covered_definition,
             error_references_flag,
             error_references,
-        ] if command == "add"
+        ] if (command == "add" || command == "update")
             && subject == "scenario"
             && slice_flag == "--slice"
             && kind_flag == "--kind"
@@ -4179,19 +4178,18 @@ fn parse_cli_30(arguments: &[String]) -> Result<Cli, ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let error_references = parse_command_error_names(error_references)
                 .map_err(|error| ShellError::message(error.to_string()))?;
+            let scenario = NewSliceScenario::new_contract(
+                slice_slug,
+                name,
+                given,
+                when,
+                then,
+                contract_kind,
+                covered_definition,
+            )
+            .with_error_references(CommandErrorNames::from_names(error_references));
             Ok(Cli {
-                command: Command::AddSliceScenario {
-                    scenario: NewSliceScenario::new_contract(
-                        slice_slug,
-                        name,
-                        given,
-                        when,
-                        then,
-                        contract_kind,
-                        covered_definition,
-                    )
-                    .with_error_references(CommandErrorNames::from_names(error_references)),
-                },
+                command: slice_scenario_command(command, scenario),
             })
         }
         _ => parse_cli_31(arguments),
@@ -4331,7 +4329,7 @@ fn parse_cli_33(arguments: &[String]) -> Result<Cli, ShellError> {
             read_streams,
             written_streams_flag,
             written_streams,
-        ] if command == "add"
+        ] if (command == "add" || command == "update")
             && subject == "scenario"
             && slice_flag == "--slice"
             && kind_flag == "--kind"
@@ -4367,19 +4365,18 @@ fn parse_cli_33(arguments: &[String]) -> Result<Cli, ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let (read_streams, written_streams) =
                 parse_scenario_streams(read_streams, written_streams)?;
+            let scenario = NewSliceScenario::new_contract(
+                slice_slug,
+                name,
+                given,
+                when,
+                then,
+                contract_kind,
+                covered_definition,
+            )
+            .with_streams(read_streams, written_streams);
             Ok(Cli {
-                command: Command::AddSliceScenario {
-                    scenario: NewSliceScenario::new_contract(
-                        slice_slug,
-                        name,
-                        given,
-                        when,
-                        then,
-                        contract_kind,
-                        covered_definition,
-                    )
-                    .with_streams(read_streams, written_streams),
-                },
+                command: slice_scenario_command(command, scenario),
             })
         }
         _ => parse_cli_34(arguments),
@@ -4413,7 +4410,7 @@ fn parse_cli_34(arguments: &[String]) -> Result<Cli, ShellError> {
             written_streams,
             error_references_flag,
             error_references,
-        ] if command == "add"
+        ] if (command == "add" || command == "update")
             && subject == "scenario"
             && slice_flag == "--slice"
             && kind_flag == "--kind"
@@ -4452,20 +4449,19 @@ fn parse_cli_34(arguments: &[String]) -> Result<Cli, ShellError> {
                 parse_scenario_streams(read_streams, written_streams)?;
             let error_references = parse_command_error_names(error_references)
                 .map_err(|error| ShellError::message(error.to_string()))?;
+            let scenario = NewSliceScenario::new_contract(
+                slice_slug,
+                name,
+                given,
+                when,
+                then,
+                contract_kind,
+                covered_definition,
+            )
+            .with_streams(read_streams, written_streams)
+            .with_error_references(CommandErrorNames::from_names(error_references));
             Ok(Cli {
-                command: Command::AddSliceScenario {
-                    scenario: NewSliceScenario::new_contract(
-                        slice_slug,
-                        name,
-                        given,
-                        when,
-                        then,
-                        contract_kind,
-                        covered_definition,
-                    )
-                    .with_streams(read_streams, written_streams)
-                    .with_error_references(CommandErrorNames::from_names(error_references)),
-                },
+                command: slice_scenario_command(command, scenario),
             })
         }
         _ => parse_cli_35(arguments),
@@ -6529,6 +6525,14 @@ fn parse_basic_scenario(
         ScenarioKind::Contract => Err(ShellError::message(
             "contract scenarios require --contract-kind and --covered-definition",
         )),
+    }
+}
+
+fn slice_scenario_command(command: &str, scenario: NewSliceScenario) -> Command {
+    if command == "add" {
+        Command::AddSliceScenario { scenario }
+    } else {
+        Command::UpdateSliceScenario { scenario }
     }
 }
 

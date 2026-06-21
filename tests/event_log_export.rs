@@ -90,6 +90,108 @@ mod tests {
     }
 
     #[test]
+    fn check_rebuilds_contract_scenario_updates_from_exported_events() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        create_project_with_workflow_and_slice(&temp_dir)?;
+        add_duplicate_ticket_contract_scenario(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "scenario",
+                "--slice",
+                "capture-ticket",
+                "--kind",
+                "contract",
+                "--name",
+                "Duplicate ticket is rejected",
+                "--given",
+                "tickets stream already contains a duplicate title",
+                "--when",
+                "CaptureTicket handles the repeated title",
+                "--then",
+                "TicketAlreadySubmitted is returned",
+                "--contract-kind",
+                "command",
+                "--covered-definition",
+                "CaptureTicket",
+                "--error-references",
+                "TicketAlreadySubmitted",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        fs::remove_file(temp_dir.path().join("emc.toml"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/lean"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?
+                .contains("TicketAlreadySubmitted is returned"),
+            "updated contract scenario must be rebuilt from exported events"
+        );
+        assert!(
+            !fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?
+                .contains("DuplicateTicket is returned"),
+            "old contract scenario text must not be rebuilt from exported events"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_rebuilds_contract_scenario_removals_from_exported_events() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        create_project_with_workflow_and_slice(&temp_dir)?;
+        add_duplicate_ticket_contract_scenario(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "scenario",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "Duplicate ticket is rejected",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        fs::remove_file(temp_dir.path().join("emc.toml"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/lean"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        assert!(
+            !fs::read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?
+                .contains("Duplicate ticket is rejected"),
+            "removed contract scenario must not be rebuilt from exported events"
+        );
+        assert!(
+            !fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?
+                .contains("Duplicate ticket is rejected"),
+            "removed contract scenario must be absent from rebuilt Quint artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn check_rebuilds_slice_outcomes_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
@@ -2667,6 +2769,37 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .success();
+        Ok(())
+    }
+
+    fn add_duplicate_ticket_contract_scenario(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "scenario",
+                "--slice",
+                "capture-ticket",
+                "--kind",
+                "contract",
+                "--name",
+                "Duplicate ticket is rejected",
+                "--given",
+                "tickets stream already contains duplicate title",
+                "--when",
+                "CaptureTicket handles the duplicate title",
+                "--then",
+                "DuplicateTicket is returned",
+                "--contract-kind",
+                "command",
+                "--covered-definition",
+                "CaptureTicket",
+                "--error-references",
+                "DuplicateTicket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
         Ok(())
     }
 

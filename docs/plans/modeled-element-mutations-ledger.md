@@ -61,21 +61,19 @@ This ledger tracks #159 across multiple PRs.
 - PR #202: added event-sourced CLI and MCP update/remove support for
   workflow transition evidence facts. Covers behavior through synchronized
   Lean4/Quint artifact assertions, MCP entry points, and exported-event replay.
-- Current branch: adds event-sourced CLI and MCP remove support for workflow
+- PR #204: added event-sourced CLI and MCP remove support for workflow
   entry lifecycle coverage requirements and update/remove support for workflow
   entry lifecycle state facts. Covers behavior through synchronized Lean4/Quint
   artifact assertions, MCP entry points, and exported-event replay.
+- Current branch: confirms contract scenario update/remove parity through CLI,
+  MCP, and exported-event replay behavior tests.
 
 ## Current PR boundary
 
-- This PR should broaden beyond scenarios, commands, events, read models, views,
-  controls, outcomes, automations, translations, external payload definitions,
-  board elements, board connections, data-flow facts, workflow outcomes, and
-  workflow command-error facts, and workflow transition updates to
-  workflow-owned definition update/remove and workflow transition evidence
-  update/remove, then entry lifecycle coverage/state mutation support without
-  closing #159. Keep #159 open until all modeled element families listed in the
-  issue have CLI and MCP update/remove coverage.
+- This PR should add direct completion evidence for contract scenario
+  update/remove parity without changing the shared scenario mutation behavior.
+  Keep #159 open until the final audit confirms every modeled element family
+  listed in the issue has CLI and MCP update/remove coverage.
 
 ## Remaining modeled element targets
 
@@ -94,8 +92,8 @@ This ledger tracks #159 across multiple PRs.
   payloads are covered by PR #186, board elements are covered by PR #188, board
   connections are covered by PR #190, and data-flow facts are covered by PR
   #192.
-- Scenario follow-up: add tests for contract scenario update/remove if needed by
-  final completion evidence.
+- Scenario follow-up: contract scenario update/remove completion evidence is
+  covered by the current branch.
 
 ## Focused verification already run
 
@@ -147,6 +145,9 @@ This ledger tracks #159 across multiple PRs.
 - `cargo test --test connect_workflow workflow_entry_lifecycle`
 - `cargo test --test mcp_connect_workflow workflow_entry_lifecycle`
 - `cargo test --test event_log_export workflow_entry_lifecycle`
+- `cargo test --test update_slice contract_scenario`
+- `cargo test --test mcp_stdio contract_slice_scenario`
+- `cargo test --test event_log_export contract_scenario`
 
 ## Next likely increment
 

@@ -573,6 +573,76 @@ mod tests {
     }
 
     #[test]
+    fn mcp_stdio_updates_contract_slice_scenario() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_scenario(temp_dir.path())?;
+        add_duplicate_ticket_contract_scenario(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(update_contract_slice_scenario_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"update_slice_scenario\""))
+            .stdout(predicate::str::contains(
+                "updated scenario Duplicate ticket is rejected on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_quint.contains("TicketAlreadySubmitted is returned"),
+            "MCP-updated contract scenario must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_quint.contains("DuplicateTicket is returned"),
+            "old contract scenario text must be absent after MCP update"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_stdio_removes_contract_slice_scenario() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_scenario(temp_dir.path())?;
+        add_duplicate_ticket_contract_scenario(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(remove_contract_slice_scenario_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"remove_slice_scenario\""))
+            .stdout(predicate::str::contains(
+                "removed scenario Duplicate ticket is rejected from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            fs::read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        assert!(
+            !slice_lean.contains("Duplicate ticket is rejected"),
+            "MCP-removed contract scenario must be absent from Lean slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_stdio_updates_command_definition() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         initialize_project_with_command(temp_dir.path())?;
@@ -1535,6 +1605,22 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_slice_scenario\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"Actor captures ticket\"}}}\n",
+        )
+    }
+
+    fn update_contract_slice_scenario_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_slice_scenario\",\"arguments\":{\"slice\":\"capture-ticket\",\"kind\":\"contract\",\"name\":\"Duplicate ticket is rejected\",\"given\":\"tickets stream already contains a duplicate title\",\"when\":\"CaptureTicket handles the repeated title\",\"then\":\"TicketAlreadySubmitted is returned\",\"contract_kind\":\"command\",\"covered_definition\":\"CaptureTicket\",\"error_references\":[\"TicketAlreadySubmitted\"]}}}\n",
+        )
+    }
+
+    fn remove_contract_slice_scenario_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_slice_scenario\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"Duplicate ticket is rejected\"}}}\n",
         )
     }
 
