@@ -182,6 +182,8 @@ pub(crate) enum ExportedEventType {
     SliceBoardElementUpdated,
     SliceBoardElementRemoved,
     SliceBoardConnectionAdded,
+    SliceBoardConnectionUpdated,
+    SliceBoardConnectionRemoved,
     ReviewRecorded,
     ConflictResolved,
 }
@@ -245,6 +247,8 @@ impl ExportedEventType {
             "SliceBoardElementUpdated" => Ok(Self::SliceBoardElementUpdated),
             "SliceBoardElementRemoved" => Ok(Self::SliceBoardElementRemoved),
             "SliceBoardConnectionAdded" => Ok(Self::SliceBoardConnectionAdded),
+            "SliceBoardConnectionUpdated" => Ok(Self::SliceBoardConnectionUpdated),
+            "SliceBoardConnectionRemoved" => Ok(Self::SliceBoardConnectionRemoved),
             "ReviewRecorded" => Ok(Self::ReviewRecorded),
             "ConflictResolved" => Ok(Self::ConflictResolved),
             _ => Err(ExportedEventTypeError::new(value)),
@@ -307,6 +311,8 @@ impl AsRef<str> for ExportedEventType {
             Self::SliceBoardElementUpdated => "SliceBoardElementUpdated",
             Self::SliceBoardElementRemoved => "SliceBoardElementRemoved",
             Self::SliceBoardConnectionAdded => "SliceBoardConnectionAdded",
+            Self::SliceBoardConnectionUpdated => "SliceBoardConnectionUpdated",
+            Self::SliceBoardConnectionRemoved => "SliceBoardConnectionRemoved",
             Self::ReviewRecorded => "ReviewRecorded",
             Self::ConflictResolved => "ConflictResolved",
         }
@@ -1566,6 +1572,61 @@ impl SliceBoardConnectionAddedEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct SliceBoardConnectionUpdatedEventPayload {
+    previous: NewBoardConnection,
+    connection: NewBoardConnection,
+}
+
+impl SliceBoardConnectionUpdatedEventPayload {
+    fn from_connections(previous: &NewBoardConnection, connection: &NewBoardConnection) -> Self {
+        Self {
+            previous: previous.clone(),
+            connection: connection.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        let slice = slice_slug(required_str(payload, "slice")?)?;
+        let previous = NewBoardConnection::new(
+            slice.clone(),
+            board_connection_endpoint(required_str(payload, "source")?)?,
+            board_connection_endpoint_kind(required_str(payload, "source_kind")?)?,
+            board_connection_endpoint(required_str(payload, "target")?)?,
+            board_connection_endpoint_kind(required_str(payload, "target_kind")?)?,
+        );
+        let connection = NewBoardConnection::new(
+            slice,
+            board_connection_endpoint(required_str(payload, "new_source")?)?,
+            board_connection_endpoint_kind(required_str(payload, "new_source_kind")?)?,
+            board_connection_endpoint(required_str(payload, "new_target")?)?,
+            board_connection_endpoint_kind(required_str(payload, "new_target_kind")?)?,
+        );
+        Ok(Self {
+            previous,
+            connection,
+        })
+    }
+
+    fn into_connections(self) -> (NewBoardConnection, NewBoardConnection) {
+        (self.previous, self.connection)
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "slice": self.previous.slice_slug().as_ref(),
+            "source": self.previous.source().as_ref(),
+            "source_kind": self.previous.source_kind().as_ref(),
+            "target": self.previous.target().as_ref(),
+            "target_kind": self.previous.target_kind().as_ref(),
+            "new_source": self.connection.source().as_ref(),
+            "new_source_kind": self.connection.source_kind().as_ref(),
+            "new_target": self.connection.target().as_ref(),
+            "new_target_kind": self.connection.target_kind().as_ref(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct ReviewRecordedEventPayload {
     workflow_slug: WorkflowSlug,
     model_content_digest: ModelContentDigest,
@@ -2484,6 +2545,13 @@ pub(crate) enum ExportedEventBody {
     SliceBoardConnectionAdded {
         connection: NewBoardConnection,
     },
+    SliceBoardConnectionUpdated {
+        previous: NewBoardConnection,
+        connection: NewBoardConnection,
+    },
+    SliceBoardConnectionRemoved {
+        connection: NewBoardConnection,
+    },
     ReviewRecorded {
         workflow_slug: WorkflowSlug,
         model_content_digest: ModelContentDigest,
@@ -2590,12 +2658,30 @@ impl ExportedEventBody {
             Self::SliceAutomationDefinitionRemoved { .. } => {
                 ExportedEventType::SliceAutomationDefinitionRemoved
             }
+            Self::SliceBoardElementAdded { .. }
+            | Self::SliceBoardElementUpdated { .. }
+            | Self::SliceBoardElementRemoved { .. }
+            | Self::SliceBoardConnectionAdded { .. }
+            | Self::SliceBoardConnectionUpdated { .. }
+            | Self::SliceBoardConnectionRemoved { .. } => self.board_event_type(),
+            Self::ReviewRecorded { .. } => ExportedEventType::ReviewRecorded,
+            Self::ConflictResolved { .. } => ExportedEventType::ConflictResolved,
+        }
+    }
+
+    fn board_event_type(&self) -> ExportedEventType {
+        match self {
             Self::SliceBoardElementAdded { .. } => ExportedEventType::SliceBoardElementAdded,
             Self::SliceBoardElementUpdated { .. } => ExportedEventType::SliceBoardElementUpdated,
             Self::SliceBoardElementRemoved { .. } => ExportedEventType::SliceBoardElementRemoved,
             Self::SliceBoardConnectionAdded { .. } => ExportedEventType::SliceBoardConnectionAdded,
-            Self::ReviewRecorded { .. } => ExportedEventType::ReviewRecorded,
-            Self::ConflictResolved { .. } => ExportedEventType::ConflictResolved,
+            Self::SliceBoardConnectionUpdated { .. } => {
+                ExportedEventType::SliceBoardConnectionUpdated
+            }
+            Self::SliceBoardConnectionRemoved { .. } => {
+                ExportedEventType::SliceBoardConnectionRemoved
+            }
+            _ => self.event_type(),
         }
     }
 
@@ -2756,10 +2842,25 @@ impl ExportedEventBody {
             Self::SliceBoardElementAdded { .. }
             | Self::SliceBoardElementUpdated { .. }
             | Self::SliceBoardElementRemoved { .. } => self.board_element_payload_json(),
-            Self::SliceBoardConnectionAdded { connection } => {
+            Self::SliceBoardConnectionAdded { .. }
+            | Self::SliceBoardConnectionUpdated { .. }
+            | Self::SliceBoardConnectionRemoved { .. } => self.board_connection_payload_json(),
+            _ => self.misc_payload_json(),
+        }
+    }
+
+    fn board_connection_payload_json(&self) -> Value {
+        match self {
+            Self::SliceBoardConnectionAdded { connection }
+            | Self::SliceBoardConnectionRemoved { connection } => {
                 SliceBoardConnectionAddedEventPayload::from_connection(connection).to_json_value()
             }
-            _ => self.misc_payload_json(),
+            Self::SliceBoardConnectionUpdated {
+                previous,
+                connection,
+            } => SliceBoardConnectionUpdatedEventPayload::from_connections(previous, connection)
+                .to_json_value(),
+            _ => self.slice_payload_json(),
         }
     }
 
@@ -2946,21 +3047,10 @@ impl ExportedEventBody {
             | ExportedEventType::SliceExternalPayloadDefinitionRemoved => {
                 Self::external_payload_from_event_type_and_payload(event_type, payload)
             }
-            ExportedEventType::SliceEventDefinitionAdded => Ok(Self::SliceEventDefinitionAdded {
-                event: SliceEventDefinitionAddedEventPayload::from_json_value(payload)?
-                    .into_event(),
-            }),
-            ExportedEventType::SliceEventDefinitionUpdated => {
-                Ok(Self::SliceEventDefinitionUpdated {
-                    event: SliceEventDefinitionAddedEventPayload::from_json_value(payload)?
-                        .into_event(),
-                })
-            }
-            ExportedEventType::SliceEventDefinitionRemoved => {
-                Ok(Self::SliceEventDefinitionRemoved {
-                    slice: slice_slug(required_str(payload, "slice")?)?,
-                    name: event_name(required_str(payload, "name")?)?,
-                })
+            ExportedEventType::SliceEventDefinitionAdded
+            | ExportedEventType::SliceEventDefinitionUpdated
+            | ExportedEventType::SliceEventDefinitionRemoved => {
+                Self::event_definition_from_event_type_and_payload(event_type, payload)
             }
             ExportedEventType::SliceCommandDefinitionAdded => {
                 Ok(Self::SliceCommandDefinitionAdded {
@@ -3010,10 +3100,11 @@ impl ExportedEventBody {
             | ExportedEventType::SliceBoardElementRemoved => {
                 Self::board_element_from_event_type_and_payload(event_type, payload)
             }
-            ExportedEventType::SliceBoardConnectionAdded => Ok(Self::SliceBoardConnectionAdded {
-                connection: SliceBoardConnectionAddedEventPayload::from_json_value(payload)?
-                    .into_connection(),
-            }),
+            ExportedEventType::SliceBoardConnectionAdded
+            | ExportedEventType::SliceBoardConnectionUpdated
+            | ExportedEventType::SliceBoardConnectionRemoved => {
+                Self::board_connection_from_event_type_and_payload(event_type, payload)
+            }
             _ => Self::misc_from_event_type_and_payload(event_type, payload),
         }
     }
@@ -3048,6 +3139,33 @@ impl ExportedEventBody {
         }
     }
 
+    fn event_definition_from_event_type_and_payload(
+        event_type: ExportedEventType,
+        payload: &Value,
+    ) -> Result<Self, String> {
+        match event_type {
+            ExportedEventType::SliceEventDefinitionAdded => Ok(Self::SliceEventDefinitionAdded {
+                event: SliceEventDefinitionAddedEventPayload::from_json_value(payload)?
+                    .into_event(),
+            }),
+            ExportedEventType::SliceEventDefinitionUpdated => {
+                Ok(Self::SliceEventDefinitionUpdated {
+                    event: SliceEventDefinitionAddedEventPayload::from_json_value(payload)?
+                        .into_event(),
+                })
+            }
+            ExportedEventType::SliceEventDefinitionRemoved => {
+                Ok(Self::SliceEventDefinitionRemoved {
+                    slice: slice_slug(required_str(payload, "slice")?)?,
+                    name: event_name(required_str(payload, "name")?)?,
+                })
+            }
+            other => Err(format!(
+                "event_definition_from_event_type_and_payload received a non-event-definition event type {other}"
+            )),
+        }
+    }
+
     fn bit_level_data_flow_from_payload(payload: &Value) -> Result<Self, String> {
         Ok(Self::SliceBitLevelDataFlowAdded {
             data_flow: SliceBitLevelDataFlowAddedEventPayload::from_json_value(payload)?
@@ -3074,6 +3192,36 @@ impl ExportedEventBody {
             }),
             other => Err(format!(
                 "board_element_from_event_type_and_payload received a non-board-element event type {other}"
+            )),
+        }
+    }
+
+    fn board_connection_from_event_type_and_payload(
+        event_type: ExportedEventType,
+        payload: &Value,
+    ) -> Result<Self, String> {
+        match event_type {
+            ExportedEventType::SliceBoardConnectionAdded => Ok(Self::SliceBoardConnectionAdded {
+                connection: SliceBoardConnectionAddedEventPayload::from_json_value(payload)?
+                    .into_connection(),
+            }),
+            ExportedEventType::SliceBoardConnectionUpdated => {
+                let (previous, connection) =
+                    SliceBoardConnectionUpdatedEventPayload::from_json_value(payload)?
+                        .into_connections();
+                Ok(Self::SliceBoardConnectionUpdated {
+                    previous,
+                    connection,
+                })
+            }
+            ExportedEventType::SliceBoardConnectionRemoved => {
+                Ok(Self::SliceBoardConnectionRemoved {
+                    connection: SliceBoardConnectionAddedEventPayload::from_json_value(payload)?
+                        .into_connection(),
+                })
+            }
+            other => Err(format!(
+                "board_connection_from_event_type_and_payload received a non-board-connection event type {other}"
             )),
         }
     }
@@ -3767,6 +3915,28 @@ impl EventDraft {
         }
     }
 
+    pub(crate) fn slice_board_connection_updated(
+        previous: &NewBoardConnection,
+        connection: &NewBoardConnection,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::slice(previous.slice_slug()),
+            body: ExportedEventBody::SliceBoardConnectionUpdated {
+                previous: previous.clone(),
+                connection: connection.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn slice_board_connection_removed(connection: &NewBoardConnection) -> Self {
+        Self {
+            stream_id: EventStreamId::slice(connection.slice_slug()),
+            body: ExportedEventBody::SliceBoardConnectionRemoved {
+                connection: connection.clone(),
+            },
+        }
+    }
+
     pub(crate) fn review_recorded(
         workflow_slug: &WorkflowSlug,
         model_content_digest: &ModelContentDigest,
@@ -4121,6 +4291,10 @@ impl ProjectedModel {
             | EmcEvent::SliceBoardElementRemoved { .. } => {
                 Self::apply_board_element_event(model, event)
             }
+            EmcEvent::SliceBoardConnectionUpdated { .. }
+            | EmcEvent::SliceBoardConnectionRemoved { .. } => {
+                Self::apply_board_connection_event(model, event)
+            }
             EmcEvent::SliceTranslationDefinitionUpdated { .. }
             | EmcEvent::SliceTranslationDefinitionRemoved { .. } => {
                 Self::apply_translation_definition_event(model, event)
@@ -4141,15 +4315,9 @@ impl ProjectedModel {
             | EmcEvent::SliceCommandDefinitionRemoved { .. } => {
                 Self::apply_command_definition_event(model, event)
             }
-            EmcEvent::SliceReadModelDefinitionUpdated { read_model, .. } => {
-                Self::apply_read_model_definition_updated(model, read_model.read_model())
-            }
-            EmcEvent::SliceReadModelDefinitionRemoved { read_model, .. } => {
-                Self::apply_read_model_definition_removed(
-                    model,
-                    read_model.slice(),
-                    read_model.name(),
-                )
+            EmcEvent::SliceReadModelDefinitionUpdated { .. }
+            | EmcEvent::SliceReadModelDefinitionRemoved { .. } => {
+                Self::apply_read_model_definition_event(model, event)
             }
             EmcEvent::SliceViewDefinitionUpdated { view, .. } => {
                 Self::apply_view_definition_updated(model, view.view())
@@ -4403,6 +4571,27 @@ impl ProjectedModel {
         }
     }
 
+    fn apply_board_connection_event(
+        model: Option<Self>,
+        event: EmcEvent,
+    ) -> Result<Option<Self>, String> {
+        match event {
+            EmcEvent::SliceBoardConnectionUpdated { connection, .. } => {
+                Self::apply_board_connection_updated(
+                    model,
+                    connection.previous().clone(),
+                    connection.replacement().clone(),
+                )
+            }
+            EmcEvent::SliceBoardConnectionRemoved { connection, .. } => {
+                Self::apply_board_connection_removed(model, connection.connection().clone())
+            }
+            _ => {
+                Err("apply_board_connection_event received a non-board-connection event".to_owned())
+            }
+        }
+    }
+
     fn apply_translation_definition_event(
         model: Option<Self>,
         event: EmcEvent,
@@ -4497,6 +4686,27 @@ impl ProjectedModel {
         }
     }
 
+    fn apply_read_model_definition_event(
+        model: Option<Self>,
+        event: EmcEvent,
+    ) -> Result<Option<Self>, String> {
+        match event {
+            EmcEvent::SliceReadModelDefinitionUpdated { read_model, .. } => {
+                Self::apply_read_model_definition_updated(model, read_model.read_model())
+            }
+            EmcEvent::SliceReadModelDefinitionRemoved { read_model, .. } => {
+                Self::apply_read_model_definition_removed(
+                    model,
+                    read_model.slice(),
+                    read_model.name(),
+                )
+            }
+            _ => {
+                Err("apply_read_model_definition_event received a non-read-model event".to_owned())
+            }
+        }
+    }
+
     fn apply_slice_scenario_event(
         model: Option<Self>,
         event: EmcEvent,
@@ -4542,6 +4752,29 @@ impl ProjectedModel {
             slice: slice.clone(),
             name: name.clone(),
         })?;
+        Ok(Some(model))
+    }
+
+    fn apply_board_connection_updated(
+        model: Option<Self>,
+        previous: NewBoardConnection,
+        connection: NewBoardConnection,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceBoardConnectionUpdated")?;
+        model.apply_slice_fact_body(ExportedEventBody::SliceBoardConnectionUpdated {
+            previous,
+            connection,
+        })?;
+        Ok(Some(model))
+    }
+
+    fn apply_board_connection_removed(
+        model: Option<Self>,
+        connection: NewBoardConnection,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceBoardConnectionRemoved")?;
+        model
+            .apply_slice_fact_body(ExportedEventBody::SliceBoardConnectionRemoved { connection })?;
         Ok(Some(model))
     }
 
@@ -5224,14 +5457,46 @@ impl ProjectedModel {
             | ExportedEventBody::SliceBoardElementRemoved { .. } => {
                 self.apply_slice_board_element_body(body)?;
             }
+            ExportedEventBody::SliceBoardConnectionAdded { .. }
+            | ExportedEventBody::SliceBoardConnectionUpdated { .. }
+            | ExportedEventBody::SliceBoardConnectionRemoved { .. } => {
+                self.apply_slice_board_connection_body(body)?;
+            }
+            other => {
+                return Err(format!(
+                    "unexpected slice fact event body {}",
+                    other.event_type()
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn apply_slice_board_connection_body(&mut self, body: ExportedEventBody) -> Result<(), String> {
+        match body {
             ExportedEventBody::SliceBoardConnectionAdded { connection } => {
                 self.slice_mut(connection.slice_slug(), "SliceBoardConnectionAdded")?
                     .board_connections
                     .push(connection);
             }
+            ExportedEventBody::SliceBoardConnectionUpdated {
+                previous,
+                connection,
+            } => {
+                let slice = self.slice_mut(previous.slice_slug(), "SliceBoardConnectionUpdated")?;
+                slice
+                    .board_connections
+                    .retain(|existing| existing != &previous);
+                slice.board_connections.push(connection);
+            }
+            ExportedEventBody::SliceBoardConnectionRemoved { connection } => {
+                self.slice_mut(connection.slice_slug(), "SliceBoardConnectionRemoved")?
+                    .board_connections
+                    .retain(|existing| existing != &connection);
+            }
             other => {
                 return Err(format!(
-                    "unexpected slice fact event body {}",
+                    "apply_slice_board_connection_body received a non-board-connection body {}",
                     other.event_type()
                 ));
             }

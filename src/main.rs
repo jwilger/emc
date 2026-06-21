@@ -100,6 +100,13 @@ enum Command {
     AddBoardConnection {
         connection: NewBoardConnection,
     },
+    UpdateBoardConnection {
+        previous: NewBoardConnection,
+        replacement: NewBoardConnection,
+    },
+    RemoveBoardConnection {
+        connection: NewBoardConnection,
+    },
     AddBoardElement {
         element: NewBoardElement,
     },
@@ -332,6 +339,10 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::AddBoardConnection { connection } => {
             interpret(&command::add_board_connection(connection))
         }
+        Command::UpdateBoardConnection {
+            previous,
+            replacement,
+        } => interpret(&command::update_board_connection(previous, replacement)),
         Command::AddBoardElement { element } => interpret(&command::add_board_element(element)),
         Command::UpdateBoardElement { element } => {
             interpret(&command::update_board_element(element))
@@ -486,6 +497,9 @@ fn run_definition_removal_commands(command: Command) -> Result<(), ShellError> {
             slice_slug,
             element_name,
         } => interpret(&command::remove_board_element(slice_slug, element_name)),
+        Command::RemoveBoardConnection { connection } => {
+            interpret(&command::remove_board_connection(connection))
+        }
         Command::RemoveEventDefinition {
             slice_slug,
             event_name,
@@ -598,6 +612,26 @@ fn parse_slice_and_view_name(slice: &str, name: &str) -> Result<(SliceSlug, View
     let view_name =
         parse_view_name(name).map_err(|error| ShellError::message(error.to_string()))?;
     Ok((slice_slug, view_name))
+}
+
+fn parse_board_connection_cli(
+    slice: &str,
+    source: &str,
+    source_kind: &str,
+    target: &str,
+    target_kind: &str,
+) -> Result<NewBoardConnection, ShellError> {
+    Ok(NewBoardConnection::new(
+        parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?,
+        parse_board_connection_endpoint(source)
+            .map_err(|error| ShellError::message(error.to_string()))?,
+        parse_board_connection_endpoint_kind(source_kind)
+            .map_err(|error| ShellError::message(error.to_string()))?,
+        parse_board_connection_endpoint(target)
+            .map_err(|error| ShellError::message(error.to_string()))?,
+        parse_board_connection_endpoint_kind(target_kind)
+            .map_err(|error| ShellError::message(error.to_string()))?,
+    ))
 }
 
 fn build_view_read_model_field(
@@ -2728,7 +2762,7 @@ fn parse_cli_20(arguments: &[String]) -> Result<Cli, ShellError> {
     }
 }
 
-fn parse_cli_21(arguments: &[String]) -> Result<Cli, ShellError> {
+fn parse_board_connection_command(arguments: &[String]) -> Result<Option<Cli>, ShellError> {
     match arguments {
         [
             command,
@@ -2743,7 +2777,7 @@ fn parse_cli_21(arguments: &[String]) -> Result<Cli, ShellError> {
             target,
             target_kind_flag,
             target_kind,
-        ] if command == "add"
+        ] if (command == "add" || command == "remove")
             && subject == "board-connection"
             && slice_flag == "--slice"
             && source_flag == "--source"
@@ -2751,28 +2785,77 @@ fn parse_cli_21(arguments: &[String]) -> Result<Cli, ShellError> {
             && target_flag == "--target"
             && target_kind_flag == "--target-kind" =>
         {
-            let slice_slug =
-                parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
-            let source = parse_board_connection_endpoint(source)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let source_kind = parse_board_connection_endpoint_kind(source_kind)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let target = parse_board_connection_endpoint(target)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let target_kind = parse_board_connection_endpoint_kind(target_kind)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            Ok(Cli {
-                command: Command::AddBoardConnection {
-                    connection: NewBoardConnection::new(
-                        slice_slug,
+            let connection =
+                parse_board_connection_cli(slice, source, source_kind, target, target_kind)?;
+            let command = if command == "add" {
+                Command::AddBoardConnection { connection }
+            } else {
+                Command::RemoveBoardConnection { connection }
+            };
+            Ok(Some(Cli { command }))
+        }
+        [
+            command,
+            subject,
+            slice_flag,
+            slice,
+            source_flag,
+            source,
+            source_kind_flag,
+            source_kind,
+            target_flag,
+            target,
+            target_kind_flag,
+            target_kind,
+            new_source_flag,
+            new_source,
+            new_source_kind_flag,
+            new_source_kind,
+            new_target_flag,
+            new_target,
+            new_target_kind_flag,
+            new_target_kind,
+        ] if command == "update"
+            && subject == "board-connection"
+            && slice_flag == "--slice"
+            && source_flag == "--source"
+            && source_kind_flag == "--source-kind"
+            && target_flag == "--target"
+            && target_kind_flag == "--target-kind"
+            && new_source_flag == "--new-source"
+            && new_source_kind_flag == "--new-source-kind"
+            && new_target_flag == "--new-target"
+            && new_target_kind_flag == "--new-target-kind" =>
+        {
+            Ok(Some(Cli {
+                command: Command::UpdateBoardConnection {
+                    previous: parse_board_connection_cli(
+                        slice,
                         source,
                         source_kind,
                         target,
                         target_kind,
-                    ),
+                    )?,
+                    replacement: parse_board_connection_cli(
+                        slice,
+                        new_source,
+                        new_source_kind,
+                        new_target,
+                        new_target_kind,
+                    )?,
                 },
-            })
+            }))
         }
+        _ => Ok(None),
+    }
+}
+
+fn parse_cli_21(arguments: &[String]) -> Result<Cli, ShellError> {
+    if let Some(cli) = parse_board_connection_command(arguments)? {
+        return Ok(cli);
+    }
+
+    match arguments {
         [
             command,
             subject,

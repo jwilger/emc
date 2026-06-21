@@ -31,16 +31,16 @@ use crate::core::formal_slice_facts::{
 use crate::core::modeling_enums::MODELING_ENUMS;
 use crate::core::slice::NewSlice;
 use crate::core::types::{
-    CommandInputSourceDescription, CommandInputSourceKind, CommandName, DatumName,
-    EventAttributeName, EventAttributeSourceField, EventAttributeSourceKind,
-    EventAttributeSourceName, EventName, GeneratedEventAttributeSourceKind, ModelDescription,
-    NavigationTargetName, ProvenanceDescription, ReadModelFieldSourceKind, SingletonRepeatBehavior,
-    SliceSlug, SourceChainHop, StreamName, TransitionTriggerName, ViewName,
-    WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowEventParticipation,
-    WorkflowOutcomeRecord, WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName,
-    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
-    WorkflowTransitionEvidenceNavigationEndpoints, WorkflowTransitionEvidenceRecord,
-    WorkflowTransitionKind, WorkflowTransitionSourceEvidenceText,
+    BoardConnectionEndpoint, BoardConnectionEndpointKind, CommandInputSourceDescription,
+    CommandInputSourceKind, CommandName, DatumName, EventAttributeName, EventAttributeSourceField,
+    EventAttributeSourceKind, EventAttributeSourceName, EventName,
+    GeneratedEventAttributeSourceKind, ModelDescription, NavigationTargetName,
+    ProvenanceDescription, ReadModelFieldSourceKind, SingletonRepeatBehavior, SliceSlug,
+    SourceChainHop, StreamName, TransitionTriggerName, ViewName, WorkflowCommandErrorRecord,
+    WorkflowEntryLifecycleStateRecord, WorkflowEventParticipation, WorkflowOutcomeRecord,
+    WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord,
+    WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionEvidenceNavigationEndpoints,
+    WorkflowTransitionEvidenceRecord, WorkflowTransitionKind, WorkflowTransitionSourceEvidenceText,
     WorkflowTransitionTargetEvidenceText, WorkflowViewRole,
 };
 use crate::core::workflow::NewWorkflow;
@@ -959,29 +959,96 @@ fn add_board_connection_tool() -> Tool {
     Tool::new(
         "add_board_connection",
         "Add a board connection causal-shape fact directly to Lean4 and Quint slice artifacts.",
-        schema_object(json!({
-                "type": "object",
-                "properties": {
-                    "slice": {
-                        "type": "string"
-                    },
-                    "source": {
-                        "type": "string"
-                    },
-                    "source_kind": {
-                        "type": "string"
-                    },
-                    "target": {
-                        "type": "string"
-                    },
-                    "target_kind": {
-                        "type": "string"
-                    }
-                },
-                "required": ["slice", "source", "source_kind", "target", "target_kind"],
-                "additionalProperties": false
-        })),
+        board_connection_schema(),
     )
+}
+
+fn update_board_connection_tool() -> Tool {
+    Tool::new(
+        "update_board_connection",
+        "Update a board connection causal-shape fact in Lean4 and Quint slice artifacts.",
+        board_connection_update_schema(),
+    )
+}
+
+fn remove_board_connection_tool() -> Tool {
+    Tool::new(
+        "remove_board_connection",
+        "Remove a board connection causal-shape fact from Lean4 and Quint slice artifacts.",
+        board_connection_schema(),
+    )
+}
+
+fn board_connection_schema() -> JsonObject {
+    schema_object(json!({
+            "type": "object",
+            "properties": {
+                "slice": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "source_kind": {
+                    "type": "string"
+                },
+                "target": {
+                    "type": "string"
+                },
+                "target_kind": {
+                    "type": "string"
+                }
+            },
+            "required": ["slice", "source", "source_kind", "target", "target_kind"],
+            "additionalProperties": false
+    }))
+}
+
+fn board_connection_update_schema() -> JsonObject {
+    schema_object(json!({
+            "type": "object",
+            "properties": {
+                "slice": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "source_kind": {
+                    "type": "string"
+                },
+                "target": {
+                    "type": "string"
+                },
+                "target_kind": {
+                    "type": "string"
+                },
+                "new_source": {
+                    "type": "string"
+                },
+                "new_source_kind": {
+                    "type": "string"
+                },
+                "new_target": {
+                    "type": "string"
+                },
+                "new_target_kind": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "slice",
+                "source",
+                "source_kind",
+                "target",
+                "target_kind",
+                "new_source",
+                "new_source_kind",
+                "new_target",
+                "new_target_kind"
+            ],
+            "additionalProperties": false
+    }))
 }
 
 fn slice_definition_tools() -> Vec<Tool> {
@@ -1717,6 +1784,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         update_translation_definition_tool(),
         update_external_payload_definition_tool(),
         update_board_element_tool(),
+        update_board_connection_tool(),
         update_command_definition_tool(),
         update_event_definition_tool(),
         update_outcome_definition_tool(),
@@ -1729,6 +1797,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         remove_translation_definition_tool(),
         remove_external_payload_definition_tool(),
         remove_board_element_tool(),
+        remove_board_connection_tool(),
         remove_command_definition_tool(),
         remove_event_definition_tool(),
         remove_outcome_definition_tool(),
@@ -2108,6 +2177,7 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
             Some(update_external_payload_definition_tool_text(request))
         }
         "update_board_element" => Some(update_board_element_tool_text(request)),
+        "update_board_connection" => Some(update_board_connection_tool_text(request)),
         "update_command_definition" => Some(update_command_definition_tool_text(request)),
         "update_event_definition" => Some(update_event_definition_tool_text(request)),
         "update_outcome_definition" => Some(update_outcome_definition_tool_text(request)),
@@ -2122,6 +2192,7 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
             Some(remove_external_payload_definition_tool_text(request))
         }
         "remove_board_element" => Some(remove_board_element_tool_text(request)),
+        "remove_board_connection" => Some(remove_board_connection_tool_text(request)),
         "remove_command_definition" => Some(remove_command_definition_tool_text(request)),
         "remove_event_definition" => Some(remove_event_definition_tool_text(request)),
         "remove_outcome_definition" => Some(remove_outcome_definition_tool_text(request)),
@@ -3213,58 +3284,76 @@ fn required_tool_arguments<'request>(
 }
 
 fn add_board_connection_tool_text(request: &Value) -> Result<String, ShellError> {
-    let arguments = request
-        .get("params")
-        .and_then(|params| params.get("arguments"))
-        .ok_or_else(|| ShellError::message("add_board_connection requires arguments"))?;
-    let slice_slug = arguments
+    let arguments = required_tool_arguments(request, "add_board_connection")?;
+    interpret_collect_reports(&command::add_board_connection(
+        board_connection_from_arguments(arguments, "add_board_connection", "")?,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn update_board_connection_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = required_tool_arguments(request, "update_board_connection")?;
+    interpret_collect_reports(&command::update_board_connection(
+        board_connection_from_arguments(arguments, "update_board_connection", "")?,
+        board_connection_from_arguments(arguments, "update_board_connection", "new_")?,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn remove_board_connection_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = required_tool_arguments(request, "remove_board_connection")?;
+    interpret_collect_reports(&command::remove_board_connection(
+        board_connection_from_arguments(arguments, "remove_board_connection", "")?,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn board_connection_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+    prefix: &str,
+) -> Result<NewBoardConnection, ShellError> {
+    Ok(NewBoardConnection::new(
+        board_connection_slice(arguments, tool_name)?,
+        board_connection_endpoint_arg(arguments, tool_name, &format!("{prefix}source"))?,
+        board_connection_endpoint_kind_arg(arguments, tool_name, &format!("{prefix}source_kind"))?,
+        board_connection_endpoint_arg(arguments, tool_name, &format!("{prefix}target"))?,
+        board_connection_endpoint_kind_arg(arguments, tool_name, &format!("{prefix}target_kind"))?,
+    ))
+}
+
+fn board_connection_slice(arguments: &Value, tool_name: &str) -> Result<SliceSlug, ShellError> {
+    let raw_slice = arguments
         .get("slice")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_board_connection requires slice"))
-        .and_then(|raw_slice| {
-            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let source = arguments
-        .get("source")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_board_connection requires source"))
-        .and_then(|raw_source| {
-            parse_board_connection_endpoint(raw_source)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let source_kind = arguments
-        .get("source_kind")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_board_connection requires source_kind"))
-        .and_then(|raw_source_kind| {
-            parse_board_connection_endpoint_kind(raw_source_kind)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let target = arguments
-        .get("target")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_board_connection requires target"))
-        .and_then(|raw_target| {
-            parse_board_connection_endpoint(raw_target)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let target_kind = arguments
-        .get("target_kind")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_board_connection requires target_kind"))
-        .and_then(|raw_target_kind| {
-            parse_board_connection_endpoint_kind(raw_target_kind)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires slice")))?;
+    parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+}
 
-    interpret_collect_reports(&command::add_board_connection(NewBoardConnection::new(
-        slice_slug,
-        source,
-        source_kind,
-        target,
-        target_kind,
-    )))
-    .map(|reports| reports.join("\n"))
+fn board_connection_endpoint_arg(
+    arguments: &Value,
+    tool_name: &str,
+    field: &str,
+) -> Result<BoardConnectionEndpoint, ShellError> {
+    let raw_value = arguments
+        .get(field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {field}")))?;
+    parse_board_connection_endpoint(raw_value)
+        .map_err(|error| ShellError::message(error.to_string()))
+}
+
+fn board_connection_endpoint_kind_arg(
+    arguments: &Value,
+    tool_name: &str,
+    field: &str,
+) -> Result<BoardConnectionEndpointKind, ShellError> {
+    let raw_value = arguments
+        .get(field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {field}")))?;
+    parse_board_connection_endpoint_kind(raw_value)
+        .map_err(|error| ShellError::message(error.to_string()))
 }
 
 /// Required scalar fields for a command definition, parsed from MCP arguments.
