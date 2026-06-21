@@ -18,14 +18,15 @@ use crate::core::event_commands::{
     RemoveEventDefinitionCommand, RemoveExternalPayloadDefinitionCommand,
     RemoveOutcomeDefinitionCommand, RemoveReadModelDefinitionCommand, RemoveSliceCommand,
     RemoveSliceScenarioCommand, RemoveTranslationDefinitionCommand, RemoveViewControlCommand,
-    RemoveViewDefinitionCommand, RemoveWorkflowCommand, RemoveWorkflowOutcomeCommand,
-    RemoveWorkflowTransitionCommand, ResolveConflictCommand, SliceFactInput,
-    UpdateAutomationDefinitionCommand, UpdateBitLevelDataFlowCommand, UpdateBoardConnectionCommand,
-    UpdateBoardElementCommand, UpdateCommandDefinitionCommand, UpdateEventDefinitionCommand,
-    UpdateExternalPayloadDefinitionCommand, UpdateOutcomeDefinitionCommand,
-    UpdateReadModelDefinitionCommand, UpdateSliceCommand, UpdateSliceScenarioCommand,
-    UpdateTranslationDefinitionCommand, UpdateViewControlCommand, UpdateViewDefinitionCommand,
-    UpdateWorkflowCommand, UpdateWorkflowOutcomeCommand, WorkflowFactInput,
+    RemoveViewDefinitionCommand, RemoveWorkflowCommand, RemoveWorkflowCommandErrorCommand,
+    RemoveWorkflowOutcomeCommand, RemoveWorkflowTransitionCommand, ResolveConflictCommand,
+    SliceFactInput, UpdateAutomationDefinitionCommand, UpdateBitLevelDataFlowCommand,
+    UpdateBoardConnectionCommand, UpdateBoardElementCommand, UpdateCommandDefinitionCommand,
+    UpdateEventDefinitionCommand, UpdateExternalPayloadDefinitionCommand,
+    UpdateOutcomeDefinitionCommand, UpdateReadModelDefinitionCommand, UpdateSliceCommand,
+    UpdateSliceScenarioCommand, UpdateTranslationDefinitionCommand, UpdateViewControlCommand,
+    UpdateViewDefinitionCommand, UpdateWorkflowCommand, UpdateWorkflowCommandErrorCommand,
+    UpdateWorkflowOutcomeCommand, WorkflowFactInput,
 };
 use crate::core::events::{EventDraft, ExportedEventBody};
 
@@ -166,6 +167,8 @@ async fn dispatch_exported_event(
         | ExportedEventBody::WorkflowOutcomeUpdated { .. }
         | ExportedEventBody::WorkflowOutcomeRemoved { .. }
         | ExportedEventBody::WorkflowCommandErrorAdded { .. }
+        | ExportedEventBody::WorkflowCommandErrorUpdated { .. }
+        | ExportedEventBody::WorkflowCommandErrorRemoved { .. }
         | ExportedEventBody::WorkflowOwnedDefinitionAdded { .. }
         | ExportedEventBody::WorkflowTransitionEvidenceAdded { .. }
         | ExportedEventBody::WorkflowEntryLifecycleCoverageRequired { .. }
@@ -340,6 +343,28 @@ async fn dispatch_workflow_fact(
             return run_command(
                 store,
                 RemoveWorkflowOutcomeCommand::new(workflow.clone(), outcome.clone())?,
+            )
+            .await;
+        }
+        ExportedEventBody::WorkflowCommandErrorUpdated {
+            workflow,
+            previous,
+            error,
+        } => {
+            return run_command(
+                store,
+                UpdateWorkflowCommandErrorCommand::new(
+                    workflow.clone(),
+                    previous.clone(),
+                    error.clone(),
+                )?,
+            )
+            .await;
+        }
+        ExportedEventBody::WorkflowCommandErrorRemoved { workflow, error } => {
+            return run_command(
+                store,
+                RemoveWorkflowCommandErrorCommand::new(workflow.clone(), error.clone())?,
             )
             .await;
         }

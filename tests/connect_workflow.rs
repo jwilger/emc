@@ -359,6 +359,99 @@ mod tests {
     }
 
     #[test]
+    fn update_workflow_command_error_rewrites_canonical_workflow_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_open_ticket_workflow(temp_dir.path())?;
+        add_workflow_command_error(temp_dir.path(), "CaptureTicket", "DuplicateTicket")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "workflow-command-error",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--command",
+                "CaptureTicket",
+                "--error",
+                "DuplicateTicket",
+                "--new-source-slice",
+                "capture-ticket",
+                "--new-command",
+                "SubmitTicket",
+                "--new-error",
+                "TicketAlreadySubmitted",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "updated workflow command error DuplicateTicket on workflow open-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        assert!(lean.contains(
+            "def workflowCommandErrors : List WorkflowCommandError := [{ sourceSlice := \"capture-ticket\", commandName := \"SubmitTicket\", errorName := \"TicketAlreadySubmitted\" }]"
+        ));
+        assert!(
+            !lean.contains("DuplicateTicket"),
+            "updated workflow command error must replace the previous error"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_workflow_command_error_removes_it_from_canonical_workflow_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_open_ticket_workflow(temp_dir.path())?;
+        add_workflow_command_error(temp_dir.path(), "CaptureTicket", "DuplicateTicket")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "workflow-command-error",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--command",
+                "CaptureTicket",
+                "--error",
+                "DuplicateTicket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "removed workflow command error DuplicateTicket from workflow open-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        assert!(
+            quint.contains("val workflowCommandErrors: List[WorkflowCommandError] = []"),
+            "removed workflow command error must be absent from Quint workflow artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn add_workflow_owned_definition_updates_canonical_workflow_artifacts()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
@@ -2280,6 +2373,31 @@ mod tests {
                 label,
                 "--externally-relevant",
                 if externally_relevant { "true" } else { "false" },
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    fn add_workflow_command_error(
+        cwd: &Path,
+        command: &str,
+        error: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-command-error",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--command",
+                command,
+                "--error",
+                error,
             ])
             .current_dir(cwd)
             .assert()

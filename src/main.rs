@@ -225,6 +225,15 @@ enum Command {
         workflow_slug: WorkflowSlug,
         error: WorkflowCommandErrorRecord,
     },
+    UpdateWorkflowCommandError {
+        workflow_slug: WorkflowSlug,
+        previous: WorkflowCommandErrorRecord,
+        replacement: WorkflowCommandErrorRecord,
+    },
+    RemoveWorkflowCommandError {
+        workflow_slug: WorkflowSlug,
+        error: WorkflowCommandErrorRecord,
+    },
     AddWorkflowOwnedDefinition {
         workflow_slug: WorkflowSlug,
         definition: WorkflowOwnedDefinitionRecord,
@@ -426,6 +435,22 @@ fn run_workflow_commands(command: Command) -> Result<(), ShellError> {
             workflow_slug,
             error,
         } => interpret(&command::add_workflow_command_error(workflow_slug, error)),
+        Command::UpdateWorkflowCommandError {
+            workflow_slug,
+            previous,
+            replacement,
+        } => interpret(&command::update_workflow_command_error(
+            workflow_slug,
+            previous,
+            replacement,
+        )),
+        Command::RemoveWorkflowCommandError {
+            workflow_slug,
+            error,
+        } => interpret(&command::remove_workflow_command_error(
+            workflow_slug,
+            error,
+        )),
         Command::AddWorkflowOwnedDefinition {
             workflow_slug,
             definition,
@@ -4447,7 +4472,14 @@ fn parse_cli_41(arguments: &[String]) -> Result<Cli, ShellError> {
     if let Some(cli) = parse_workflow_outcome_cli(arguments)? {
         return Ok(cli);
     }
+    if let Some(cli) = parse_workflow_command_error_cli(arguments)? {
+        return Ok(cli);
+    }
 
+    parse_cli_42(arguments)
+}
+
+fn parse_workflow_command_error_cli(arguments: &[String]) -> Result<Option<Cli>, ShellError> {
     match arguments {
         [
             command,
@@ -4460,7 +4492,48 @@ fn parse_cli_41(arguments: &[String]) -> Result<Cli, ShellError> {
             command_name,
             error_flag,
             error_name,
-        ] if command == "add"
+            new_source_slice_flag,
+            new_source_slice,
+            new_command_flag,
+            new_command,
+            new_error_flag,
+            new_error,
+        ] if command == "update"
+            && subject == "workflow-command-error"
+            && workflow_flag == "--workflow"
+            && source_slice_flag == "--source-slice"
+            && command_flag == "--command"
+            && error_flag == "--error"
+            && new_source_slice_flag == "--new-source-slice"
+            && new_command_flag == "--new-command"
+            && new_error_flag == "--new-error" =>
+        {
+            let workflow_slug = parse_workflow_slug(workflow)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let previous =
+                parse_workflow_command_error_record(source_slice, command_name, error_name)?;
+            let replacement =
+                parse_workflow_command_error_record(new_source_slice, new_command, new_error)?;
+            Ok(Some(Cli {
+                command: Command::UpdateWorkflowCommandError {
+                    workflow_slug,
+                    previous,
+                    replacement,
+                },
+            }))
+        }
+        [
+            command,
+            subject,
+            workflow_flag,
+            workflow,
+            source_slice_flag,
+            source_slice,
+            command_flag,
+            command_name,
+            error_flag,
+            error_name,
+        ] if (command == "add" || command == "remove")
             && subject == "workflow-command-error"
             && workflow_flag == "--workflow"
             && source_slice_flag == "--source-slice"
@@ -4469,21 +4542,42 @@ fn parse_cli_41(arguments: &[String]) -> Result<Cli, ShellError> {
         {
             let workflow_slug = parse_workflow_slug(workflow)
                 .map_err(|error| ShellError::message(error.to_string()))?;
-            let source_slice = WorkflowTransitionEndpoint::try_new(source_slice.to_owned())
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let command_name = parse_command_name(command_name)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let error_name = parse_command_error_name(error_name)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            Ok(Cli {
-                command: Command::AddWorkflowCommandError {
-                    workflow_slug,
-                    error: WorkflowCommandErrorRecord::new(source_slice, command_name, error_name),
+            let error =
+                parse_workflow_command_error_record(source_slice, command_name, error_name)?;
+            Ok(Some(Cli {
+                command: if command == "add" {
+                    Command::AddWorkflowCommandError {
+                        workflow_slug,
+                        error,
+                    }
+                } else {
+                    Command::RemoveWorkflowCommandError {
+                        workflow_slug,
+                        error,
+                    }
                 },
-            })
+            }))
         }
-        _ => parse_cli_42(arguments),
+        _ => Ok(None),
     }
+}
+
+fn parse_workflow_command_error_record(
+    source_slice: &str,
+    command_name: &str,
+    error_name: &str,
+) -> Result<WorkflowCommandErrorRecord, ShellError> {
+    let source_slice = WorkflowTransitionEndpoint::try_new(source_slice.to_owned())
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let command_name =
+        parse_command_name(command_name).map_err(|error| ShellError::message(error.to_string()))?;
+    let error_name = parse_command_error_name(error_name)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    Ok(WorkflowCommandErrorRecord::new(
+        source_slice,
+        command_name,
+        error_name,
+    ))
 }
 
 fn parse_workflow_outcome_cli(arguments: &[String]) -> Result<Option<Cli>, ShellError> {
