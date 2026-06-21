@@ -895,6 +895,22 @@ fn add_board_element_tool() -> Tool {
     Tool::new(
         "add_board_element",
         "Add a board element causal-shape fact directly to Lean4 and Quint slice artifacts.",
+        board_element_schema(),
+    )
+}
+
+fn update_board_element_tool() -> Tool {
+    Tool::new(
+        "update_board_element",
+        "Update a board element causal-shape fact in Lean4 and Quint slice artifacts.",
+        board_element_schema(),
+    )
+}
+
+fn remove_board_element_tool() -> Tool {
+    Tool::new(
+        "remove_board_element",
+        "Remove a board element causal-shape fact from Lean4 and Quint slice artifacts.",
         schema_object(json!({
                 "type": "object",
                 "properties": {
@@ -903,24 +919,40 @@ fn add_board_element_tool() -> Tool {
                     },
                     "name": {
                         "type": "string"
-                    },
-                    "kind": {
-                        "type": "string"
-                    },
-                    "lane": {
-                        "type": "string"
-                    },
-                    "declared_name": {
-                        "type": "string"
-                    },
-                    "main_path": {
-                        "type": "boolean"
                     }
                 },
-                "required": ["slice", "name", "kind", "lane", "declared_name", "main_path"],
+                "required": ["slice", "name"],
                 "additionalProperties": false
         })),
     )
+}
+
+fn board_element_schema() -> JsonObject {
+    schema_object(json!({
+            "type": "object",
+            "properties": {
+                "slice": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "lane": {
+                    "type": "string"
+                },
+                "declared_name": {
+                    "type": "string"
+                },
+                "main_path": {
+                    "type": "boolean"
+                }
+            },
+            "required": ["slice", "name", "kind", "lane", "declared_name", "main_path"],
+            "additionalProperties": false
+    }))
 }
 
 fn add_board_connection_tool() -> Tool {
@@ -1684,6 +1716,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         update_automation_definition_tool(),
         update_translation_definition_tool(),
         update_external_payload_definition_tool(),
+        update_board_element_tool(),
         update_command_definition_tool(),
         update_event_definition_tool(),
         update_outcome_definition_tool(),
@@ -1695,6 +1728,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         remove_automation_definition_tool(),
         remove_translation_definition_tool(),
         remove_external_payload_definition_tool(),
+        remove_board_element_tool(),
         remove_command_definition_tool(),
         remove_event_definition_tool(),
         remove_outcome_definition_tool(),
@@ -2073,6 +2107,7 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "update_external_payload_definition" => {
             Some(update_external_payload_definition_tool_text(request))
         }
+        "update_board_element" => Some(update_board_element_tool_text(request)),
         "update_command_definition" => Some(update_command_definition_tool_text(request)),
         "update_event_definition" => Some(update_event_definition_tool_text(request)),
         "update_outcome_definition" => Some(update_outcome_definition_tool_text(request)),
@@ -2086,6 +2121,7 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "remove_external_payload_definition" => {
             Some(remove_external_payload_definition_tool_text(request))
         }
+        "remove_board_element" => Some(remove_board_element_tool_text(request)),
         "remove_command_definition" => Some(remove_command_definition_tool_text(request)),
         "remove_event_definition" => Some(remove_event_definition_tool_text(request)),
         "remove_outcome_definition" => Some(remove_outcome_definition_tool_text(request)),
@@ -3071,21 +3107,59 @@ fn add_bit_level_data_flow_tool_text(request: &Value) -> Result<String, ShellErr
 }
 
 fn add_board_element_tool_text(request: &Value) -> Result<String, ShellError> {
-    let arguments = request
-        .get("params")
-        .and_then(|params| params.get("arguments"))
-        .ok_or_else(|| ShellError::message("add_board_element requires arguments"))?;
+    interpret_collect_reports(&command::add_board_element(board_element_from_request(
+        request,
+        "add_board_element",
+    )?))
+    .map(|reports| reports.join("\n"))
+}
+
+fn update_board_element_tool_text(request: &Value) -> Result<String, ShellError> {
+    interpret_collect_reports(&command::update_board_element(board_element_from_request(
+        request,
+        "update_board_element",
+    )?))
+    .map(|reports| reports.join("\n"))
+}
+
+fn remove_board_element_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = required_tool_arguments(request, "remove_board_element")?;
     let slice_slug = arguments
         .get("slice")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_board_element requires slice"))
+        .ok_or_else(|| ShellError::message("remove_board_element requires slice"))
         .and_then(|raw_slice| {
             parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let name = arguments
         .get("name")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_board_element requires name"))
+        .ok_or_else(|| ShellError::message("remove_board_element requires name"))
+        .and_then(|raw_name| {
+            parse_board_element_name(raw_name)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+
+    interpret_collect_reports(&command::remove_board_element(slice_slug, name))
+        .map(|reports| reports.join("\n"))
+}
+
+fn board_element_from_request(
+    request: &Value,
+    tool_name: &str,
+) -> Result<NewBoardElement, ShellError> {
+    let arguments = required_tool_arguments(request, tool_name)?;
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires slice")))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires name")))
         .and_then(|raw_name| {
             parse_board_element_name(raw_name)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -3093,7 +3167,7 @@ fn add_board_element_tool_text(request: &Value) -> Result<String, ShellError> {
     let kind = arguments
         .get("kind")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_board_element requires kind"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires kind")))
         .and_then(|raw_kind| {
             parse_board_element_kind(raw_kind)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -3101,14 +3175,14 @@ fn add_board_element_tool_text(request: &Value) -> Result<String, ShellError> {
     let lane = arguments
         .get("lane")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_board_element requires lane"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires lane")))
         .and_then(|raw_lane| {
             parse_board_lane_id(raw_lane).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let declared_name = arguments
         .get("declared_name")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_board_element requires declared_name"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires declared_name")))
         .and_then(|raw_declared_name| {
             parse_board_element_declared_name(raw_declared_name)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -3116,17 +3190,26 @@ fn add_board_element_tool_text(request: &Value) -> Result<String, ShellError> {
     let main_path = arguments
         .get("main_path")
         .and_then(Value::as_bool)
-        .ok_or_else(|| ShellError::message("add_board_element requires main_path"))?;
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires main_path")))?;
 
-    interpret_collect_reports(&command::add_board_element(NewBoardElement::new(
+    Ok(NewBoardElement::new(
         slice_slug,
         name,
         kind,
         lane,
         declared_name,
         main_path,
-    )))
-    .map(|reports| reports.join("\n"))
+    ))
+}
+
+fn required_tool_arguments<'request>(
+    request: &'request Value,
+    tool_name: &str,
+) -> Result<&'request Value, ShellError> {
+    request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires arguments")))
 }
 
 fn add_board_connection_tool_text(request: &Value) -> Result<String, ShellError> {

@@ -3,15 +3,15 @@
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
 use crate::core::effect::{
     ChosenEventId, CleanReviewEffect, Effect, EffectPlan, EventConflictId, EventConflictResolution,
-    SliceAutomationDefinitionRemovalEffect, SliceCommandDefinitionRemovalEffect,
-    SliceDescriptionUpdateEffect, SliceEventDefinitionRemovalEffect,
-    SliceExternalPayloadDefinitionRemovalEffect, SliceKindUpdateEffect, SliceNameUpdateEffect,
-    SliceOutcomeDefinitionRemovalEffect, SliceReadModelDefinitionRemovalEffect,
-    SliceScenarioRemovalEffect, SliceTranslationDefinitionRemovalEffect,
-    SliceViewControlRemovalEffect, SliceViewControlUpdateEffect, SliceViewDefinitionRemovalEffect,
-    WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect,
-    WorkflowNameUpdateEffect, WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect,
-    WorkflowTransitionEvidenceEffect,
+    SliceAutomationDefinitionRemovalEffect, SliceBoardElementRemovalEffect,
+    SliceCommandDefinitionRemovalEffect, SliceDescriptionUpdateEffect,
+    SliceEventDefinitionRemovalEffect, SliceExternalPayloadDefinitionRemovalEffect,
+    SliceKindUpdateEffect, SliceNameUpdateEffect, SliceOutcomeDefinitionRemovalEffect,
+    SliceReadModelDefinitionRemovalEffect, SliceScenarioRemovalEffect,
+    SliceTranslationDefinitionRemovalEffect, SliceViewControlRemovalEffect,
+    SliceViewControlUpdateEffect, SliceViewDefinitionRemovalEffect, WorkflowCommandErrorEffect,
+    WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect,
+    WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
 };
 use crate::core::formal_slice_facts::{
     NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
@@ -26,11 +26,11 @@ use crate::core::project::{ProjectName, init_project};
 use crate::core::review_gate::review_gate;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    AutomationName, CommandName, ControlName, EventAttributeSourceField, EventAttributeSourceName,
-    EventName, ModelDescription, ModelName, OutcomeLabelName, ReadModelName, ReviewTimestamp,
-    ReviewerId, ScenarioName, SliceSlug, TranslationName, ViewName, WorkflowCommandErrorRecord,
-    WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord,
-    WorkflowSlug, WorkflowTransitionEvidenceRecord,
+    AutomationName, BoardElementName, CommandName, ControlName, EventAttributeSourceField,
+    EventAttributeSourceName, EventName, ModelDescription, ModelName, OutcomeLabelName,
+    ReadModelName, ReviewTimestamp, ReviewerId, ScenarioName, SliceSlug, TranslationName, ViewName,
+    WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
+    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEvidenceRecord,
 };
 use crate::core::workflow::NewWorkflow;
 
@@ -224,6 +224,19 @@ pub(crate) fn add_bit_level_data_flow(data_flow: NewBitLevelDataFlow) -> EffectP
 
 pub(crate) fn add_board_element(element: NewBoardElement) -> EffectPlan {
     EffectPlan::new(vec![Effect::AddBoardElementFromSlice(element)])
+}
+
+pub(crate) fn update_board_element(element: NewBoardElement) -> EffectPlan {
+    EffectPlan::new(vec![Effect::UpdateBoardElementFromSlice(element)])
+}
+
+pub(crate) fn remove_board_element(
+    slice_slug: SliceSlug,
+    element_name: BoardElementName,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::RemoveBoardElementFromSlice(
+        SliceBoardElementRemovalEffect::new(slice_slug, element_name),
+    )])
 }
 
 pub(crate) fn add_board_connection(connection: NewBoardConnection) -> EffectPlan {

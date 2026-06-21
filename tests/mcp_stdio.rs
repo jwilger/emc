@@ -1217,6 +1217,74 @@ mod tests {
     }
 
     #[test]
+    fn mcp_stdio_updates_board_element() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_board_element(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(update_board_element_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"update_board_element\""))
+            .stdout(predicate::str::contains(
+                "updated board element capture-ticket-command on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_quint.contains("declaredName: \"Retry capture ticket\""),
+            "MCP-updated board element declared name must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_quint.contains("declaredName: \"Capture ticket\""),
+            "old board element declared name must be absent after MCP update"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_stdio_removes_board_element() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_board_element(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(remove_board_element_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"remove_board_element\""))
+            .stdout(predicate::str::contains(
+                "removed board element capture-ticket-command from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_quint.contains("name: \"capture-ticket-command\""),
+            "MCP-removed board element must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_stdio_resolves_event_conflicts() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_slice_update_fork(&temp_dir)?;
@@ -1475,6 +1543,22 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_external_payload_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"TicketWebhookPayload\",\"field\":\"ticket_id\"}}}\n",
+        )
+    }
+
+    fn update_board_element_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_board_element\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"capture-ticket-command\",\"kind\":\"command\",\"lane\":\"actions\",\"declared_name\":\"Retry capture ticket\",\"main_path\":false}}}\n",
+        )
+    }
+
+    fn remove_board_element_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_board_element\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"capture-ticket-command\"}}}\n",
         )
     }
 
@@ -1761,6 +1845,31 @@ mod tests {
                 "webhook ticket identifier",
                 "--bit-encoding",
                 "UTF-8 webhook ticket id",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+        Ok(())
+    }
+
+    fn initialize_project_with_board_element(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        initialize_project_with_scenario(cwd)?;
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "board-element",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "capture-ticket-command",
+                "--kind",
+                "command",
+                "--lane",
+                "actions",
+                "--declared-name",
+                "Capture ticket",
+                "--main-path",
+                "true",
             ])
             .current_dir(cwd)
             .assert()

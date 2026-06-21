@@ -1603,6 +1603,106 @@ mod tests {
     }
 
     #[test]
+    fn update_board_element_rewrites_synchronized_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_capture_ticket_board_element(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "board-element",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "capture-ticket-command",
+                "--kind",
+                "command",
+                "--lane",
+                "actions",
+                "--declared-name",
+                "Retry capture ticket",
+                "--main-path",
+                "false",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "updated board element capture-ticket-command on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_lean.contains("declaredName := \"Retry capture ticket\""),
+            "updated board element declared name must be represented in Lean slice artifacts"
+        );
+        assert!(
+            slice_quint.contains("mainPath: false"),
+            "updated board element main path flag must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_lean.contains("declaredName := \"Capture ticket\""),
+            "old board element declared name must be absent from Lean slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_board_element_removes_it_from_synchronized_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_capture_ticket_board_element(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "board-element",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "capture-ticket-command",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "removed board element capture-ticket-command from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_lean.contains("name := \"capture-ticket-command\""),
+            "removed board element must be absent from Lean slice artifacts"
+        );
+        assert!(
+            !slice_quint.contains("name: \"capture-ticket-command\""),
+            "removed board element must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn remove_control_definition_removes_it_from_synchronized_artifacts()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
@@ -1969,6 +2069,31 @@ mod tests {
                 "webhook ticket identifier",
                 "--bit-encoding",
                 "UTF-8 webhook ticket id",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    fn add_capture_ticket_board_element(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "board-element",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "capture-ticket-command",
+                "--kind",
+                "command",
+                "--lane",
+                "actions",
+                "--declared-name",
+                "Capture ticket",
+                "--main-path",
+                "true",
             ])
             .current_dir(cwd)
             .assert()

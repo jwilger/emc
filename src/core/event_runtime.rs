@@ -13,17 +13,17 @@ use tokio::runtime::Builder;
 use crate::core::event_commands::{
     AddSliceCommand, AddSliceFactCommand, AddWorkflowCommand, AddWorkflowFactCommand,
     ConnectWorkflowCommand, DeclareWorkflowReadinessCommand, EmcEvent, InitializeProjectCommand,
-    RecordReviewCommand, RemoveAutomationDefinitionCommand, RemoveCommandDefinitionCommand,
-    RemoveEventDefinitionCommand, RemoveExternalPayloadDefinitionCommand,
-    RemoveOutcomeDefinitionCommand, RemoveReadModelDefinitionCommand, RemoveSliceCommand,
-    RemoveSliceScenarioCommand, RemoveTranslationDefinitionCommand, RemoveViewControlCommand,
-    RemoveViewDefinitionCommand, RemoveWorkflowCommand, RemoveWorkflowTransitionCommand,
-    ResolveConflictCommand, SliceFactInput, UpdateAutomationDefinitionCommand,
-    UpdateCommandDefinitionCommand, UpdateEventDefinitionCommand,
-    UpdateExternalPayloadDefinitionCommand, UpdateOutcomeDefinitionCommand,
-    UpdateReadModelDefinitionCommand, UpdateSliceCommand, UpdateSliceScenarioCommand,
-    UpdateTranslationDefinitionCommand, UpdateViewControlCommand, UpdateViewDefinitionCommand,
-    UpdateWorkflowCommand, WorkflowFactInput,
+    RecordReviewCommand, RemoveAutomationDefinitionCommand, RemoveBoardElementCommand,
+    RemoveCommandDefinitionCommand, RemoveEventDefinitionCommand,
+    RemoveExternalPayloadDefinitionCommand, RemoveOutcomeDefinitionCommand,
+    RemoveReadModelDefinitionCommand, RemoveSliceCommand, RemoveSliceScenarioCommand,
+    RemoveTranslationDefinitionCommand, RemoveViewControlCommand, RemoveViewDefinitionCommand,
+    RemoveWorkflowCommand, RemoveWorkflowTransitionCommand, ResolveConflictCommand, SliceFactInput,
+    UpdateAutomationDefinitionCommand, UpdateBoardElementCommand, UpdateCommandDefinitionCommand,
+    UpdateEventDefinitionCommand, UpdateExternalPayloadDefinitionCommand,
+    UpdateOutcomeDefinitionCommand, UpdateReadModelDefinitionCommand, UpdateSliceCommand,
+    UpdateSliceScenarioCommand, UpdateTranslationDefinitionCommand, UpdateViewControlCommand,
+    UpdateViewDefinitionCommand, UpdateWorkflowCommand, WorkflowFactInput,
 };
 use crate::core::events::{EventDraft, ExportedEventBody};
 
@@ -202,6 +202,8 @@ async fn dispatch_exported_event(
         | ExportedEventBody::SliceAutomationDefinitionUpdated { .. }
         | ExportedEventBody::SliceAutomationDefinitionRemoved { .. }
         | ExportedEventBody::SliceBoardElementAdded { .. }
+        | ExportedEventBody::SliceBoardElementUpdated { .. }
+        | ExportedEventBody::SliceBoardElementRemoved { .. }
         | ExportedEventBody::SliceBoardConnectionAdded { .. } => dispatch_slice(store, body).await,
         ExportedEventBody::ReviewRecorded { .. } | ExportedEventBody::ConflictResolved { .. } => {
             dispatch_review_or_conflict(store, body).await
@@ -415,6 +417,10 @@ async fn dispatch_slice(store: &FileEventStore, body: &ExportedEventBody) -> Res
         | ExportedEventBody::SliceAutomationDefinitionRemoved { .. } => {
             dispatch_slice_automation(store, body).await
         }
+        ExportedEventBody::SliceBoardElementUpdated { .. }
+        | ExportedEventBody::SliceBoardElementRemoved { .. } => {
+            dispatch_slice_board_element(store, body).await
+        }
         ExportedEventBody::SliceTranslationDefinitionUpdated { .. }
         | ExportedEventBody::SliceTranslationDefinitionRemoved { .. } => {
             dispatch_slice_translation(store, body).await
@@ -423,19 +429,9 @@ async fn dispatch_slice(store: &FileEventStore, body: &ExportedEventBody) -> Res
         | ExportedEventBody::SliceOutcomeDefinitionRemoved { .. } => {
             dispatch_slice_outcome(store, body).await
         }
-        ExportedEventBody::SliceReadModelDefinitionUpdated { read_model } => {
-            run_command(
-                store,
-                UpdateReadModelDefinitionCommand::new(read_model.clone())?,
-            )
-            .await
-        }
-        ExportedEventBody::SliceReadModelDefinitionRemoved { slice, name } => {
-            run_command(
-                store,
-                RemoveReadModelDefinitionCommand::new(slice.clone(), name.clone())?,
-            )
-            .await
+        ExportedEventBody::SliceReadModelDefinitionUpdated { .. }
+        | ExportedEventBody::SliceReadModelDefinitionRemoved { .. } => {
+            dispatch_slice_read_model(store, body).await
         }
         ExportedEventBody::SliceViewDefinitionUpdated { .. }
         | ExportedEventBody::SliceViewDefinitionRemoved { .. }
@@ -491,6 +487,29 @@ async fn dispatch_slice_command_definition(
     }
 }
 
+async fn dispatch_slice_read_model(
+    store: &FileEventStore,
+    body: &ExportedEventBody,
+) -> Result<(), String> {
+    match body {
+        ExportedEventBody::SliceReadModelDefinitionUpdated { read_model } => {
+            run_command(
+                store,
+                UpdateReadModelDefinitionCommand::new(read_model.clone())?,
+            )
+            .await
+        }
+        ExportedEventBody::SliceReadModelDefinitionRemoved { slice, name } => {
+            run_command(
+                store,
+                RemoveReadModelDefinitionCommand::new(slice.clone(), name.clone())?,
+            )
+            .await
+        }
+        _ => Err("dispatch_slice_read_model received a non-read-model body".to_owned()),
+    }
+}
+
 async fn dispatch_slice_external_payload(
     store: &FileEventStore,
     body: &ExportedEventBody,
@@ -538,6 +557,25 @@ async fn dispatch_slice_automation(
             .await
         }
         _ => Err("dispatch_slice_automation received a non-automation body".to_owned()),
+    }
+}
+
+async fn dispatch_slice_board_element(
+    store: &FileEventStore,
+    body: &ExportedEventBody,
+) -> Result<(), String> {
+    match body {
+        ExportedEventBody::SliceBoardElementUpdated { element } => {
+            run_command(store, UpdateBoardElementCommand::new(element.clone())?).await
+        }
+        ExportedEventBody::SliceBoardElementRemoved { slice, name } => {
+            run_command(
+                store,
+                RemoveBoardElementCommand::new(slice.clone(), name.clone())?,
+            )
+            .await
+        }
+        _ => Err("dispatch_slice_board_element received a non-board-element body".to_owned()),
     }
 }
 

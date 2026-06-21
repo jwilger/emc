@@ -14,11 +14,11 @@ use crate::core::formal_slice_facts::{
 };
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    AutomationName, CommandName, ControlName, EventAttributeSourceField, EventAttributeSourceName,
-    EventName, ModelDescription, ModelName, OutcomeLabelName, ReadModelName, ReviewTimestamp,
-    ReviewerId, ScenarioName, SliceSlug, TranslationName, ViewName, WorkflowCommandErrorRecord,
-    WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord,
-    WorkflowSlug, WorkflowTransitionEvidenceRecord,
+    AutomationName, BoardElementName, CommandName, ControlName, EventAttributeSourceField,
+    EventAttributeSourceName, EventName, ModelDescription, ModelName, OutcomeLabelName,
+    ReadModelName, ReviewTimestamp, ReviewerId, ScenarioName, SliceSlug, TranslationName, ViewName,
+    WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
+    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEvidenceRecord,
 };
 use crate::core::workflow::NewWorkflow;
 
@@ -216,6 +216,29 @@ impl SliceExternalPayloadDefinitionRemovalEffect {
 
     pub(crate) fn payload_field(&self) -> &EventAttributeSourceField {
         &self.payload_field
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceBoardElementRemovalEffect {
+    slice_slug: SliceSlug,
+    element_name: BoardElementName,
+}
+
+impl SliceBoardElementRemovalEffect {
+    pub(crate) fn new(slice_slug: SliceSlug, element_name: BoardElementName) -> Self {
+        Self {
+            slice_slug,
+            element_name,
+        }
+    }
+
+    pub(crate) fn slice_slug(&self) -> &SliceSlug {
+        &self.slice_slug
+    }
+
+    pub(crate) fn element_name(&self) -> &BoardElementName {
+        &self.element_name
     }
 }
 
@@ -957,6 +980,8 @@ pub(crate) enum Effect {
     AddBitLevelDataFlowFromSlice(NewBitLevelDataFlow),
     AddBoardConnectionFromSlice(NewBoardConnection),
     AddBoardElementFromSlice(NewBoardElement),
+    UpdateBoardElementFromSlice(NewBoardElement),
+    RemoveBoardElementFromSlice(SliceBoardElementRemovalEffect),
     AddCommandDefinitionFromSlice(NewCommandDefinition),
     RemoveCommandDefinitionFromSlice(SliceCommandDefinitionRemovalEffect),
     UpdateCommandDefinitionFromSlice(NewCommandDefinition),
