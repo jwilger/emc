@@ -35,7 +35,8 @@ use crate::core::effect::{
     SliceViewControlRemovalEffect, SliceViewControlUpdateEffect, SliceViewDefinitionRemovalEffect,
     WorkflowCommandErrorEffect, WorkflowCommandErrorRemovalEffect,
     WorkflowCommandErrorUpdateEffect, WorkflowDescriptionUpdateEffect,
-    WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect, WorkflowOutcomeEffect,
+    WorkflowEntryLifecycleStateEffect, WorkflowEntryLifecycleStateRemovalEffect,
+    WorkflowEntryLifecycleStateUpdateEffect, WorkflowNameUpdateEffect, WorkflowOutcomeEffect,
     WorkflowOutcomeRemovalEffect, WorkflowOutcomeUpdateEffect, WorkflowOwnedDefinitionEffect,
     WorkflowOwnedDefinitionRemovalEffect, WorkflowOwnedDefinitionUpdateEffect,
     WorkflowTransitionEvidenceEffect, WorkflowTransitionEvidenceRemovalEffect,
@@ -1487,8 +1488,17 @@ fn interpret_workflow_fact_effect(effect: &Effect) -> Option<Result<Vec<String>,
         Effect::RequireWorkflowEntryLifecycleCoverageFromWorkflow(workflow_slug) => {
             interpret_workflow_entry_lifecycle_coverage_required(workflow_slug)
         }
+        Effect::RemoveWorkflowEntryLifecycleCoverageFromWorkflow(workflow_slug) => {
+            interpret_workflow_entry_lifecycle_coverage_removed(workflow_slug)
+        }
         Effect::AddWorkflowEntryLifecycleStateFromWorkflow(effect) => {
             interpret_workflow_entry_lifecycle_state_added(effect)
+        }
+        Effect::UpdateWorkflowEntryLifecycleStateFromWorkflow(effect) => {
+            interpret_workflow_entry_lifecycle_state_updated(effect)
+        }
+        Effect::RemoveWorkflowEntryLifecycleStateFromWorkflow(effect) => {
+            interpret_workflow_entry_lifecycle_state_removed(effect)
         }
         _ => return None,
     })
@@ -1710,6 +1720,20 @@ fn interpret_workflow_entry_lifecycle_coverage_required(
     )
 }
 
+fn interpret_workflow_entry_lifecycle_coverage_removed(
+    workflow_slug: &WorkflowSlug,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![projected_report(format!(
+        "removed workflow entry lifecycle coverage requirement from workflow {}",
+        workflow_slug.as_ref()
+    ))?];
+    interpret_workflow_addition(
+        workflow_slug,
+        reports,
+        EventDraft::workflow_entry_lifecycle_coverage_removed(workflow_slug),
+    )
+}
+
 fn interpret_workflow_entry_lifecycle_state_added(
     effect: &WorkflowEntryLifecycleStateEffect,
 ) -> Result<Vec<String>, ShellError> {
@@ -1722,6 +1746,43 @@ fn interpret_workflow_entry_lifecycle_state_added(
         effect.workflow_slug(),
         reports,
         EventDraft::workflow_entry_lifecycle_state_added(effect.workflow_slug(), effect.coverage()),
+    )
+}
+
+fn interpret_workflow_entry_lifecycle_state_updated(
+    effect: &WorkflowEntryLifecycleStateUpdateEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![projected_report(format!(
+        "updated workflow entry lifecycle state {} on workflow {}",
+        effect.previous().state().as_ref(),
+        effect.workflow_slug().as_ref()
+    ))?];
+    interpret_workflow_addition(
+        effect.workflow_slug(),
+        reports,
+        EventDraft::workflow_entry_lifecycle_state_updated(
+            effect.workflow_slug(),
+            effect.previous(),
+            effect.replacement(),
+        ),
+    )
+}
+
+fn interpret_workflow_entry_lifecycle_state_removed(
+    effect: &WorkflowEntryLifecycleStateRemovalEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![projected_report(format!(
+        "removed workflow entry lifecycle state {} from workflow {}",
+        effect.coverage().state().as_ref(),
+        effect.workflow_slug().as_ref()
+    ))?];
+    interpret_workflow_addition(
+        effect.workflow_slug(),
+        reports,
+        EventDraft::workflow_entry_lifecycle_state_removed(
+            effect.workflow_slug(),
+            effect.coverage(),
+        ),
     )
 }
 

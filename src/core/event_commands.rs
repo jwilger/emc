@@ -153,12 +153,26 @@ pub(crate) enum EmcEvent {
         stream_id: StreamId,
         workflow: WorkflowSlug,
     },
+    WorkflowEntryLifecycleCoverageRemoved {
+        stream_id: StreamId,
+        workflow: WorkflowSlug,
+    },
     WorkflowEntryLifecycleStateAdded {
         stream_id: StreamId,
         workflow: WorkflowSlug,
         state: WorkflowEntryLifecycleStateName,
         step: WorkflowTransitionEndpoint,
         evidence: WorkflowEntryLifecycleEvidenceText,
+    },
+    WorkflowEntryLifecycleStateUpdated {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        coverage: WorkflowEntryLifecycleStateUpdateEvent,
+    },
+    WorkflowEntryLifecycleStateRemoved {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        coverage: WorkflowEntryLifecycleStateRemovalEvent,
     },
     WorkflowReadinessDeclared {
         stream_id: StreamId,
@@ -386,7 +400,10 @@ impl Event for EmcEvent {
             | Self::WorkflowTransitionEvidenceUpdated { stream_id, .. }
             | Self::WorkflowTransitionEvidenceRemoved { stream_id, .. }
             | Self::WorkflowEntryLifecycleCoverageRequired { stream_id, .. }
+            | Self::WorkflowEntryLifecycleCoverageRemoved { stream_id, .. }
             | Self::WorkflowEntryLifecycleStateAdded { stream_id, .. }
+            | Self::WorkflowEntryLifecycleStateUpdated { stream_id, .. }
+            | Self::WorkflowEntryLifecycleStateRemoved { stream_id, .. }
             | Self::WorkflowReadinessDeclared { stream_id, .. }
             | Self::WorkflowConnected { stream_id, .. }
             | Self::WorkflowTransitionUpdated { stream_id, .. }
@@ -1661,6 +1678,137 @@ impl CommandLogic for RemoveWorkflowTransitionEvidenceCommand {
     }
 }
 
+#[derive(Command)]
+pub(crate) struct RemoveWorkflowEntryLifecycleCoverageCommand {
+    #[stream]
+    workflow_stream: StreamId,
+    workflow: WorkflowSlug,
+}
+
+impl RemoveWorkflowEntryLifecycleCoverageCommand {
+    pub(crate) fn new(workflow: WorkflowSlug) -> Result<Self, String> {
+        Ok(Self {
+            workflow_stream: workflow_stream_id(workflow.as_ref())?,
+            workflow,
+        })
+    }
+}
+
+impl CommandLogic for RemoveWorkflowEntryLifecycleCoverageCommand {
+    type Event = EmcEvent;
+    type State = WorkflowCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_workflow_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "workflow stream must exist before removing entry lifecycle coverage"
+        );
+        Ok(vec![EmcEvent::WorkflowEntryLifecycleCoverageRemoved {
+            stream_id: self.workflow_stream.clone(),
+            workflow: self.workflow.clone(),
+        }]
+        .into())
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct UpdateWorkflowEntryLifecycleStateCommand {
+    #[stream]
+    workflow_stream: StreamId,
+    workflow: WorkflowSlug,
+    previous: WorkflowEntryLifecycleStateRecord,
+    replacement: WorkflowEntryLifecycleStateRecord,
+}
+
+impl UpdateWorkflowEntryLifecycleStateCommand {
+    pub(crate) fn new(
+        workflow: WorkflowSlug,
+        previous: WorkflowEntryLifecycleStateRecord,
+        replacement: WorkflowEntryLifecycleStateRecord,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            workflow_stream: workflow_stream_id(workflow.as_ref())?,
+            workflow,
+            previous,
+            replacement,
+        })
+    }
+}
+
+impl CommandLogic for UpdateWorkflowEntryLifecycleStateCommand {
+    type Event = EmcEvent;
+    type State = WorkflowCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_workflow_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "workflow stream must exist before updating entry lifecycle state"
+        );
+        Ok(vec![EmcEvent::WorkflowEntryLifecycleStateUpdated {
+            stream_id: self.workflow_stream.clone(),
+            coverage: WorkflowEntryLifecycleStateUpdateEvent::new(
+                self.workflow.clone(),
+                self.previous.clone(),
+                self.replacement.clone(),
+            ),
+        }]
+        .into())
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct RemoveWorkflowEntryLifecycleStateCommand {
+    #[stream]
+    workflow_stream: StreamId,
+    workflow: WorkflowSlug,
+    coverage: WorkflowEntryLifecycleStateRecord,
+}
+
+impl RemoveWorkflowEntryLifecycleStateCommand {
+    pub(crate) fn new(
+        workflow: WorkflowSlug,
+        coverage: WorkflowEntryLifecycleStateRecord,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            workflow_stream: workflow_stream_id(workflow.as_ref())?,
+            workflow,
+            coverage,
+        })
+    }
+}
+
+impl CommandLogic for RemoveWorkflowEntryLifecycleStateCommand {
+    type Event = EmcEvent;
+    type State = WorkflowCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_workflow_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "workflow stream must exist before removing entry lifecycle state"
+        );
+        Ok(vec![EmcEvent::WorkflowEntryLifecycleStateRemoved {
+            stream_id: self.workflow_stream.clone(),
+            coverage: WorkflowEntryLifecycleStateRemovalEvent::new(
+                self.workflow.clone(),
+                self.coverage.clone(),
+            ),
+        }]
+        .into())
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct WorkflowTransitionEvidenceUpdateEvent {
     workflow: WorkflowSlug,
@@ -1772,6 +1920,124 @@ impl<'de> Deserialize<'de> for WorkflowTransitionEvidenceRemovalEvent {
             }
             other => Err(DeserializeError::custom(format!(
                 "expected WorkflowTransitionEvidenceRemoved event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowEntryLifecycleStateUpdateEvent {
+    workflow: WorkflowSlug,
+    previous: WorkflowEntryLifecycleStateRecord,
+    replacement: WorkflowEntryLifecycleStateRecord,
+}
+
+impl WorkflowEntryLifecycleStateUpdateEvent {
+    pub(crate) fn new(
+        workflow: WorkflowSlug,
+        previous: WorkflowEntryLifecycleStateRecord,
+        replacement: WorkflowEntryLifecycleStateRecord,
+    ) -> Self {
+        Self {
+            workflow,
+            previous,
+            replacement,
+        }
+    }
+
+    pub(crate) fn workflow(&self) -> &WorkflowSlug {
+        &self.workflow
+    }
+
+    pub(crate) fn previous(&self) -> &WorkflowEntryLifecycleStateRecord {
+        &self.previous
+    }
+
+    pub(crate) fn replacement(&self) -> &WorkflowEntryLifecycleStateRecord {
+        &self.replacement
+    }
+}
+
+impl Serialize for WorkflowEntryLifecycleStateUpdateEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::workflow_entry_lifecycle_state_updated(
+            &self.workflow,
+            &self.previous,
+            &self.replacement,
+        )
+        .body()
+        .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for WorkflowEntryLifecycleStateUpdateEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::WorkflowEntryLifecycleStateUpdated {
+                workflow,
+                previous,
+                coverage,
+            } => Ok(Self::new(workflow, previous, coverage)),
+            other => Err(DeserializeError::custom(format!(
+                "expected WorkflowEntryLifecycleStateUpdated event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowEntryLifecycleStateRemovalEvent {
+    workflow: WorkflowSlug,
+    coverage: WorkflowEntryLifecycleStateRecord,
+}
+
+impl WorkflowEntryLifecycleStateRemovalEvent {
+    pub(crate) fn new(workflow: WorkflowSlug, coverage: WorkflowEntryLifecycleStateRecord) -> Self {
+        Self { workflow, coverage }
+    }
+
+    pub(crate) fn workflow(&self) -> &WorkflowSlug {
+        &self.workflow
+    }
+
+    pub(crate) fn coverage(&self) -> &WorkflowEntryLifecycleStateRecord {
+        &self.coverage
+    }
+}
+
+impl Serialize for WorkflowEntryLifecycleStateRemovalEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body =
+            EventDraft::workflow_entry_lifecycle_state_removed(&self.workflow, &self.coverage)
+                .body()
+                .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for WorkflowEntryLifecycleStateRemovalEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::WorkflowEntryLifecycleStateRemoved { workflow, coverage } => {
+                Ok(Self::new(workflow, coverage))
+            }
+            other => Err(DeserializeError::custom(format!(
+                "expected WorkflowEntryLifecycleStateRemoved event body, got {}",
                 other.event_type()
             ))),
         }

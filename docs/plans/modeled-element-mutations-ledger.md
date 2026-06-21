@@ -58,9 +58,13 @@ This ledger tracks #159 across multiple PRs.
 - PR #200: added event-sourced CLI and MCP update/remove support for
   workflow-owned definition facts. Covers behavior through synchronized
   Lean4/Quint artifact assertions, MCP entry points, and exported-event replay.
-- Current branch: adds event-sourced CLI and MCP update/remove support for
+- PR #202: added event-sourced CLI and MCP update/remove support for
   workflow transition evidence facts. Covers behavior through synchronized
   Lean4/Quint artifact assertions, MCP entry points, and exported-event replay.
+- Current branch: adds event-sourced CLI and MCP remove support for workflow
+  entry lifecycle coverage requirements and update/remove support for workflow
+  entry lifecycle state facts. Covers behavior through synchronized Lean4/Quint
+  artifact assertions, MCP entry points, and exported-event replay.
 
 ## Current PR boundary
 
@@ -69,8 +73,9 @@ This ledger tracks #159 across multiple PRs.
   board elements, board connections, data-flow facts, workflow outcomes, and
   workflow command-error facts, and workflow transition updates to
   workflow-owned definition update/remove and workflow transition evidence
-  update/remove without closing #159. Keep #159 open until all modeled element
-  families listed in the issue have CLI and MCP update/remove coverage.
+  update/remove, then entry lifecycle coverage/state mutation support without
+  closing #159. Keep #159 open until all modeled element families listed in the
+  issue have CLI and MCP update/remove coverage.
 
 ## Remaining modeled element targets
 
@@ -78,10 +83,10 @@ This ledger tracks #159 across multiple PRs.
   workflow and slice fields; confirm MCP/CLI parity and any gaps before closing.
 - Workflow transitions: remove is covered by earlier workflow PRs, and update
   is covered by PR #198.
-- Workflow evidence facts: entry lifecycle coverage/state. Workflow outcomes
-  are covered by PR #194, command errors are covered by PR #196, owned
-  definitions are covered by PR #200, and transition evidence is covered by the
-  current branch.
+- Workflow evidence facts: entry lifecycle coverage/state are covered by the
+  current branch. Workflow outcomes are covered by PR #194, command errors are
+  covered by PR #196, owned definitions are covered by PR #200, and transition
+  evidence is covered by PR #202.
 - Slice-owned definitions: commands are covered by PR #170, events are covered
   by PR #172, read models are covered by PR #174, views are covered by PR #176,
   controls are covered by PR #178, outcomes are covered by PR #180, automations
@@ -139,8 +144,11 @@ This ledger tracks #159 across multiple PRs.
 - `cargo test --test connect_workflow workflow_transition_evidence`
 - `cargo test --test mcp_connect_workflow workflow_transition_evidence`
 - `cargo test --test event_log_export workflow_transition_evidence`
+- `cargo test --test connect_workflow workflow_entry_lifecycle`
+- `cargo test --test mcp_connect_workflow workflow_entry_lifecycle`
+- `cargo test --test event_log_export workflow_entry_lifecycle`
 
 ## Next likely increment
 
-Confirm workflow/slice lifecycle, entry lifecycle coverage/state mutations, and
-contract scenario parity before closing #159.
+Confirm workflow/slice lifecycle and contract scenario parity before closing
+#159.

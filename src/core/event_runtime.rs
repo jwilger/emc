@@ -19,6 +19,7 @@ use crate::core::event_commands::{
     RemoveOutcomeDefinitionCommand, RemoveReadModelDefinitionCommand, RemoveSliceCommand,
     RemoveSliceScenarioCommand, RemoveTranslationDefinitionCommand, RemoveViewControlCommand,
     RemoveViewDefinitionCommand, RemoveWorkflowCommand, RemoveWorkflowCommandErrorCommand,
+    RemoveWorkflowEntryLifecycleCoverageCommand, RemoveWorkflowEntryLifecycleStateCommand,
     RemoveWorkflowOutcomeCommand, RemoveWorkflowOwnedDefinitionCommand,
     RemoveWorkflowTransitionCommand, RemoveWorkflowTransitionEvidenceCommand,
     ResolveConflictCommand, SliceFactInput, UpdateAutomationDefinitionCommand,
@@ -27,7 +28,8 @@ use crate::core::event_commands::{
     UpdateExternalPayloadDefinitionCommand, UpdateOutcomeDefinitionCommand,
     UpdateReadModelDefinitionCommand, UpdateSliceCommand, UpdateSliceScenarioCommand,
     UpdateTranslationDefinitionCommand, UpdateViewControlCommand, UpdateViewDefinitionCommand,
-    UpdateWorkflowCommand, UpdateWorkflowCommandErrorCommand, UpdateWorkflowOutcomeCommand,
+    UpdateWorkflowCommand, UpdateWorkflowCommandErrorCommand,
+    UpdateWorkflowEntryLifecycleStateCommand, UpdateWorkflowOutcomeCommand,
     UpdateWorkflowOwnedDefinitionCommand, UpdateWorkflowTransitionCommand,
     UpdateWorkflowTransitionEvidenceCommand, WorkflowFactInput,
 };
@@ -180,7 +182,10 @@ async fn dispatch_exported_event(
         | ExportedEventBody::WorkflowTransitionEvidenceUpdated { .. }
         | ExportedEventBody::WorkflowTransitionEvidenceRemoved { .. }
         | ExportedEventBody::WorkflowEntryLifecycleCoverageRequired { .. }
-        | ExportedEventBody::WorkflowEntryLifecycleStateAdded { .. } => {
+        | ExportedEventBody::WorkflowEntryLifecycleCoverageRemoved { .. }
+        | ExportedEventBody::WorkflowEntryLifecycleStateAdded { .. }
+        | ExportedEventBody::WorkflowEntryLifecycleStateUpdated { .. }
+        | ExportedEventBody::WorkflowEntryLifecycleStateRemoved { .. } => {
             dispatch_workflow_fact(store, body).await
         }
         ExportedEventBody::SliceAdded { .. }
@@ -391,6 +396,9 @@ async fn dispatch_workflow_fact_mutation(
     if dispatch_workflow_transition_evidence_mutation(store, body).await? {
         return Ok(true);
     }
+    if dispatch_workflow_entry_lifecycle_mutation(store, body).await? {
+        return Ok(true);
+    }
 
     match body {
         ExportedEventBody::WorkflowOutcomeUpdated {
@@ -464,6 +472,47 @@ async fn dispatch_workflow_fact_mutation(
             run_command(
                 store,
                 RemoveWorkflowOwnedDefinitionCommand::new(workflow.clone(), definition.clone())?,
+            )
+            .await?;
+            Ok(true)
+        }
+        _ => Ok(false),
+    }
+}
+
+async fn dispatch_workflow_entry_lifecycle_mutation(
+    store: &FileEventStore,
+    body: &ExportedEventBody,
+) -> Result<bool, String> {
+    match body {
+        ExportedEventBody::WorkflowEntryLifecycleCoverageRemoved { workflow } => {
+            run_command(
+                store,
+                RemoveWorkflowEntryLifecycleCoverageCommand::new(workflow.clone())?,
+            )
+            .await?;
+            Ok(true)
+        }
+        ExportedEventBody::WorkflowEntryLifecycleStateUpdated {
+            workflow,
+            previous,
+            coverage,
+        } => {
+            run_command(
+                store,
+                UpdateWorkflowEntryLifecycleStateCommand::new(
+                    workflow.clone(),
+                    previous.clone(),
+                    coverage.clone(),
+                )?,
+            )
+            .await?;
+            Ok(true)
+        }
+        ExportedEventBody::WorkflowEntryLifecycleStateRemoved { workflow, coverage } => {
+            run_command(
+                store,
+                RemoveWorkflowEntryLifecycleStateCommand::new(workflow.clone(), coverage.clone())?,
             )
             .await?;
             Ok(true)

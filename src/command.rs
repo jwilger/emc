@@ -15,11 +15,13 @@ use crate::core::effect::{
     SliceTranslationDefinitionRemovalEffect, SliceViewControlRemovalEffect,
     SliceViewControlUpdateEffect, SliceViewDefinitionRemovalEffect, WorkflowCommandErrorEffect,
     WorkflowCommandErrorRemovalEffect, WorkflowCommandErrorUpdateEffect,
-    WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect,
-    WorkflowOutcomeEffect, WorkflowOutcomeRemovalEffect, WorkflowOutcomeUpdateEffect,
-    WorkflowOwnedDefinitionEffect, WorkflowOwnedDefinitionRemovalEffect,
-    WorkflowOwnedDefinitionUpdateEffect, WorkflowTransitionEvidenceEffect,
-    WorkflowTransitionEvidenceRemovalEffect, WorkflowTransitionEvidenceUpdateEffect,
+    WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect,
+    WorkflowEntryLifecycleStateRemovalEffect, WorkflowEntryLifecycleStateUpdateEffect,
+    WorkflowNameUpdateEffect, WorkflowOutcomeEffect, WorkflowOutcomeRemovalEffect,
+    WorkflowOutcomeUpdateEffect, WorkflowOwnedDefinitionEffect,
+    WorkflowOwnedDefinitionRemovalEffect, WorkflowOwnedDefinitionUpdateEffect,
+    WorkflowTransitionEvidenceEffect, WorkflowTransitionEvidenceRemovalEffect,
+    WorkflowTransitionEvidenceUpdateEffect,
 };
 use crate::core::formal_slice_facts::{
     NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
@@ -403,12 +405,37 @@ pub(crate) fn require_workflow_entry_lifecycle_coverage(workflow_slug: WorkflowS
     ])
 }
 
+pub(crate) fn remove_workflow_entry_lifecycle_coverage(workflow_slug: WorkflowSlug) -> EffectPlan {
+    EffectPlan::new(vec![
+        Effect::RemoveWorkflowEntryLifecycleCoverageFromWorkflow(workflow_slug),
+    ])
+}
+
 pub(crate) fn add_workflow_entry_lifecycle_state(
     workflow_slug: WorkflowSlug,
     coverage: WorkflowEntryLifecycleStateRecord,
 ) -> EffectPlan {
     EffectPlan::new(vec![Effect::AddWorkflowEntryLifecycleStateFromWorkflow(
         WorkflowEntryLifecycleStateEffect::new(workflow_slug, coverage),
+    )])
+}
+
+pub(crate) fn update_workflow_entry_lifecycle_state(
+    workflow_slug: WorkflowSlug,
+    previous: WorkflowEntryLifecycleStateRecord,
+    replacement: WorkflowEntryLifecycleStateRecord,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::UpdateWorkflowEntryLifecycleStateFromWorkflow(
+        WorkflowEntryLifecycleStateUpdateEffect::new(workflow_slug, previous, replacement),
+    )])
+}
+
+pub(crate) fn remove_workflow_entry_lifecycle_state(
+    workflow_slug: WorkflowSlug,
+    coverage: WorkflowEntryLifecycleStateRecord,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::RemoveWorkflowEntryLifecycleStateFromWorkflow(
+        WorkflowEntryLifecycleStateRemovalEffect::new(workflow_slug, coverage),
     )])
 }
 

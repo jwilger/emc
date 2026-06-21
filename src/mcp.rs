@@ -40,6 +40,7 @@ use crate::core::types::{
     GeneratedEventAttributeSourceKind, ModelDescription, NavigationTargetName,
     ProvenanceDescription, ReadModelFieldSourceKind, SingletonRepeatBehavior, SliceSlug,
     SourceChainHop, StreamName, TransitionTriggerName, ViewName, WorkflowCommandErrorRecord,
+    WorkflowEntryLifecycleEvidenceText, WorkflowEntryLifecycleStateName,
     WorkflowEntryLifecycleStateRecord, WorkflowEventParticipation, WorkflowOutcomeRecord,
     WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord,
     WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionEvidenceNavigationEndpoints,
@@ -750,26 +751,98 @@ fn add_workflow_entry_lifecycle_state_tool() -> Tool {
     Tool::new(
         "add_workflow_entry_lifecycle_state",
         "Add formal application-entry lifecycle state coverage evidence directly to Lean4 and Quint workflow artifacts.",
-        schema_object(json!({
-                "type": "object",
-                "properties": {
-                    "workflow": {
-                        "type": "string"
-                    },
-                    "state": {
-                        "type": "string"
-                    },
-                    "step": {
-                        "type": "string"
-                    },
-                    "evidence": {
-                        "type": "string"
-                    }
-                },
-                "required": ["workflow", "state", "step", "evidence"],
-                "additionalProperties": false
-        })),
+        workflow_entry_lifecycle_state_schema(),
     )
+}
+
+fn update_workflow_entry_lifecycle_state_tool() -> Tool {
+    Tool::new(
+        "update_workflow_entry_lifecycle_state",
+        "Update formal application-entry lifecycle state coverage evidence in Lean4 and Quint workflow artifacts.",
+        workflow_entry_lifecycle_state_update_schema(),
+    )
+}
+
+fn remove_workflow_entry_lifecycle_coverage_tool() -> Tool {
+    Tool::new(
+        "remove_workflow_entry_lifecycle_coverage",
+        "Remove the formal application-entry lifecycle coverage requirement from Lean4 and Quint workflow artifacts.",
+        workflow_slug_schema(),
+    )
+}
+
+fn remove_workflow_entry_lifecycle_state_tool() -> Tool {
+    Tool::new(
+        "remove_workflow_entry_lifecycle_state",
+        "Remove formal application-entry lifecycle state coverage evidence from Lean4 and Quint workflow artifacts.",
+        workflow_entry_lifecycle_state_schema(),
+    )
+}
+
+fn workflow_slug_schema() -> JsonObject {
+    schema_object(json!({
+            "type": "object",
+            "properties": {
+                "workflow": {
+                    "type": "string"
+                }
+            },
+            "required": ["workflow"],
+            "additionalProperties": false
+    }))
+}
+
+fn workflow_entry_lifecycle_state_schema() -> JsonObject {
+    schema_object(json!({
+            "type": "object",
+            "properties": {
+                "workflow": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "step": {
+                    "type": "string"
+                },
+                "evidence": {
+                    "type": "string"
+                }
+            },
+            "required": ["workflow", "state", "step", "evidence"],
+            "additionalProperties": false
+    }))
+}
+
+fn workflow_entry_lifecycle_state_update_schema() -> JsonObject {
+    schema_object(json!({
+            "type": "object",
+            "properties": {
+                "workflow": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "step": {
+                    "type": "string"
+                },
+                "evidence": {
+                    "type": "string"
+                },
+                "new_state": {
+                    "type": "string"
+                },
+                "new_step": {
+                    "type": "string"
+                },
+                "new_evidence": {
+                    "type": "string"
+                }
+            },
+            "required": ["workflow", "state", "step", "evidence", "new_state", "new_step", "new_evidence"],
+            "additionalProperties": false
+    }))
 }
 
 fn slice_structure_tools() -> Vec<Tool> {
@@ -1856,6 +1929,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         update_workflow_command_error_tool(),
         update_workflow_owned_definition_tool(),
         update_workflow_transition_evidence_tool(),
+        update_workflow_entry_lifecycle_state_tool(),
         update_slice_tool(),
         update_slice_kind_tool(),
         update_slice_name_tool(),
@@ -1891,6 +1965,8 @@ fn model_mutation_tools() -> Vec<Tool> {
         remove_workflow_command_error_tool(),
         remove_workflow_owned_definition_tool(),
         remove_workflow_transition_evidence_tool(),
+        remove_workflow_entry_lifecycle_coverage_tool(),
+        remove_workflow_entry_lifecycle_state_tool(),
         connect_workflow_tool(),
         update_transition_tool(),
         remove_transition_tool(),
@@ -2688,6 +2764,9 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "update_workflow_transition_evidence" => {
             Some(update_workflow_transition_evidence_tool_text(request))
         }
+        "update_workflow_entry_lifecycle_state" => {
+            Some(update_workflow_entry_lifecycle_state_tool_text(request))
+        }
         "update_slice" => Some(update_slice_tool_text(request)),
         "update_slice_kind" => Some(update_slice_kind_tool_text(request)),
         "update_slice_name" => Some(update_slice_name_tool_text(request)),
@@ -2730,6 +2809,12 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         }
         "remove_workflow_transition_evidence" => {
             Some(remove_workflow_transition_evidence_tool_text(request))
+        }
+        "remove_workflow_entry_lifecycle_coverage" => {
+            Some(remove_workflow_entry_lifecycle_coverage_tool_text(request))
+        }
+        "remove_workflow_entry_lifecycle_state" => {
+            Some(remove_workflow_entry_lifecycle_state_tool_text(request))
         }
         "connect_workflow" => Some(connect_workflow_tool_text(request)),
         "update_transition" => Some(update_transition_tool_text(request)),
@@ -3574,50 +3659,123 @@ fn require_workflow_entry_lifecycle_coverage_tool_text(
 }
 
 fn add_workflow_entry_lifecycle_state_tool_text(request: &Value) -> Result<String, ShellError> {
-    let arguments = request
-        .get("params")
-        .and_then(|params| params.get("arguments"))
-        .ok_or_else(|| {
-            ShellError::message("add_workflow_entry_lifecycle_state requires arguments")
-        })?;
-    let workflow_slug = arguments
-        .get("workflow")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_workflow_entry_lifecycle_state requires workflow"))
-        .and_then(|raw_workflow| {
-            parse_workflow_slug(raw_workflow)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let state = arguments
-        .get("state")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_workflow_entry_lifecycle_state requires state"))
-        .and_then(|raw_state| {
-            parse_workflow_entry_lifecycle_state_name(raw_state)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let step = arguments
-        .get("step")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_workflow_entry_lifecycle_state requires step"))
-        .and_then(|raw_step| {
-            parse_workflow_transition_endpoint(raw_step)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let evidence = arguments
-        .get("evidence")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_workflow_entry_lifecycle_state requires evidence"))
-        .and_then(|raw_evidence| {
-            parse_workflow_entry_lifecycle_evidence_text(raw_evidence)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
+    let arguments = required_tool_arguments(request, "add_workflow_entry_lifecycle_state")?;
+    let workflow_slug =
+        workflow_slug_from_arguments(arguments, "add_workflow_entry_lifecycle_state")?;
+    let coverage = workflow_entry_lifecycle_state_from_arguments(
+        arguments,
+        "add_workflow_entry_lifecycle_state",
+        "",
+    )?;
 
     interpret_collect_reports(&command::add_workflow_entry_lifecycle_state(
         workflow_slug,
-        WorkflowEntryLifecycleStateRecord::new(state, step, evidence),
+        coverage,
     ))
     .map(|reports| reports.join("\n"))
+}
+
+fn update_workflow_entry_lifecycle_state_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = required_tool_arguments(request, "update_workflow_entry_lifecycle_state")?;
+    let workflow_slug =
+        workflow_slug_from_arguments(arguments, "update_workflow_entry_lifecycle_state")?;
+    interpret_collect_reports(&command::update_workflow_entry_lifecycle_state(
+        workflow_slug,
+        workflow_entry_lifecycle_state_from_arguments(
+            arguments,
+            "update_workflow_entry_lifecycle_state",
+            "",
+        )?,
+        workflow_entry_lifecycle_state_from_arguments(
+            arguments,
+            "update_workflow_entry_lifecycle_state",
+            "new_",
+        )?,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn remove_workflow_entry_lifecycle_coverage_tool_text(
+    request: &Value,
+) -> Result<String, ShellError> {
+    let arguments = required_tool_arguments(request, "remove_workflow_entry_lifecycle_coverage")?;
+    let workflow_slug =
+        workflow_slug_from_arguments(arguments, "remove_workflow_entry_lifecycle_coverage")?;
+    interpret_collect_reports(&command::remove_workflow_entry_lifecycle_coverage(
+        workflow_slug,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn remove_workflow_entry_lifecycle_state_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = required_tool_arguments(request, "remove_workflow_entry_lifecycle_state")?;
+    let workflow_slug =
+        workflow_slug_from_arguments(arguments, "remove_workflow_entry_lifecycle_state")?;
+    let coverage = workflow_entry_lifecycle_state_from_arguments(
+        arguments,
+        "remove_workflow_entry_lifecycle_state",
+        "",
+    )?;
+
+    interpret_collect_reports(&command::remove_workflow_entry_lifecycle_state(
+        workflow_slug,
+        coverage,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn workflow_entry_lifecycle_state_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+    prefix: &str,
+) -> Result<WorkflowEntryLifecycleStateRecord, ShellError> {
+    let state = workflow_entry_lifecycle_state_name_from_arguments(arguments, tool_name, prefix)?;
+    let step = workflow_entry_lifecycle_step_from_arguments(arguments, tool_name, prefix)?;
+    let evidence = workflow_entry_lifecycle_evidence_from_arguments(arguments, tool_name, prefix)?;
+    Ok(WorkflowEntryLifecycleStateRecord::new(
+        state, step, evidence,
+    ))
+}
+
+fn workflow_entry_lifecycle_state_name_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+    prefix: &str,
+) -> Result<WorkflowEntryLifecycleStateName, ShellError> {
+    let field = format!("{prefix}state");
+    let raw = arguments
+        .get(&field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {field}")))?;
+    parse_workflow_entry_lifecycle_state_name(raw)
+        .map_err(|error| ShellError::message(error.to_string()))
+}
+
+fn workflow_entry_lifecycle_step_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+    prefix: &str,
+) -> Result<WorkflowTransitionEndpoint, ShellError> {
+    let field = format!("{prefix}step");
+    let raw = arguments
+        .get(&field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {field}")))?;
+    parse_workflow_transition_endpoint(raw).map_err(|error| ShellError::message(error.to_string()))
+}
+
+fn workflow_entry_lifecycle_evidence_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+    prefix: &str,
+) -> Result<WorkflowEntryLifecycleEvidenceText, ShellError> {
+    let field = format!("{prefix}evidence");
+    let raw = arguments
+        .get(&field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {field}")))?;
+    parse_workflow_entry_lifecycle_evidence_text(raw)
+        .map_err(|error| ShellError::message(error.to_string()))
 }
 
 fn add_slice_tool_text(request: &Value) -> Result<String, ShellError> {

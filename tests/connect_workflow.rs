@@ -1024,6 +1024,139 @@ mod tests {
     }
 
     #[test]
+    fn update_workflow_entry_lifecycle_state_rewrites_canonical_workflow_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let cwd = temp_dir.path();
+
+        setup_application_entry_workflow(cwd)?;
+        run_emc(
+            cwd,
+            &[
+                "mark",
+                "workflow-entry-lifecycle-required",
+                "--workflow",
+                "application-entry",
+            ],
+        )?;
+        add_all_entry_lifecycle_states(cwd)?;
+
+        run_emc_stdout(
+            cwd,
+            &[
+                "update",
+                "workflow-entry-lifecycle-state",
+                "--workflow",
+                "application-entry",
+                "--state",
+                "fully_configured",
+                "--step",
+                "entry-state",
+                "--evidence",
+                "entry-state view distinguishes fully configured accounts",
+                "--new-state",
+                "fully_configured",
+                "--new-step",
+                "entry-state",
+                "--new-evidence",
+                "entry-state view confirms configuration completion",
+            ],
+            "updated workflow entry lifecycle state fully_configured on workflow application-entry",
+        )?;
+
+        let lean = read_to_string(cwd.join("model/lean/ApplicationEntry.lean"))?;
+        let quint = read_to_string(cwd.join("model/quint/ApplicationEntry.qnt"))?;
+
+        assert!(
+            lean.contains("evidence := \"entry-state view confirms configuration completion\"")
+        );
+        assert!(quint.contains("evidence: \"entry-state view confirms configuration completion\""));
+        assert!(
+            !lean.contains("entry-state view distinguishes fully configured accounts"),
+            "updated workflow entry lifecycle evidence must replace the old Lean value"
+        );
+        assert!(
+            !quint.contains("entry-state view distinguishes fully configured accounts"),
+            "updated workflow entry lifecycle evidence must replace the old Quint value"
+        );
+
+        run_emc(cwd, &["check"])?;
+        run_emc(cwd, &["verify"])?;
+        Ok(())
+    }
+
+    #[test]
+    fn remove_workflow_entry_lifecycle_coverage_and_state_rewrites_canonical_workflow_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let cwd = temp_dir.path();
+
+        setup_application_entry_workflow(cwd)?;
+        run_emc(
+            cwd,
+            &[
+                "mark",
+                "workflow-entry-lifecycle-required",
+                "--workflow",
+                "application-entry",
+            ],
+        )?;
+        add_entry_lifecycle_state(
+            cwd,
+            "fresh_uninitialized",
+            "entry-state",
+            "entry-state view distinguishes first arrival before initialization",
+        )?;
+
+        run_emc_stdout(
+            cwd,
+            &[
+                "remove",
+                "workflow-entry-lifecycle-required",
+                "--workflow",
+                "application-entry",
+            ],
+            "removed workflow entry lifecycle coverage requirement from workflow application-entry",
+        )?;
+        run_emc_stdout(
+            cwd,
+            &[
+                "remove",
+                "workflow-entry-lifecycle-state",
+                "--workflow",
+                "application-entry",
+                "--state",
+                "fresh_uninitialized",
+                "--step",
+                "entry-state",
+                "--evidence",
+                "entry-state view distinguishes first arrival before initialization",
+            ],
+            "removed workflow entry lifecycle state fresh_uninitialized from workflow application-entry",
+        )?;
+
+        let lean = read_to_string(cwd.join("model/lean/ApplicationEntry.lean"))?;
+        let quint = read_to_string(cwd.join("model/quint/ApplicationEntry.qnt"))?;
+
+        assert!(lean.contains("def workflowRequiresEntryLifecycleCoverage : Bool := false"));
+        assert!(quint.contains("val workflowRequiresEntryLifecycleCoverage = false"));
+        assert!(
+            lean.contains(
+                "def workflowEntryLifecycleStates : List WorkflowEntryLifecycleState := []"
+            )
+        );
+        assert!(
+            quint.contains(
+                "val workflowEntryLifecycleStates: List[WorkflowEntryLifecycleState] = []"
+            )
+        );
+
+        run_emc(cwd, &["check"])?;
+        run_emc(cwd, &["verify"])?;
+        Ok(())
+    }
+
+    #[test]
     fn check_accepts_synchronized_formal_workflow_outcome_and_error_facts()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;

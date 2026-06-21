@@ -149,7 +149,10 @@ pub(crate) enum ExportedEventType {
     WorkflowTransitionEvidenceUpdated,
     WorkflowTransitionEvidenceRemoved,
     WorkflowEntryLifecycleCoverageRequired,
+    WorkflowEntryLifecycleCoverageRemoved,
     WorkflowEntryLifecycleStateAdded,
+    WorkflowEntryLifecycleStateUpdated,
+    WorkflowEntryLifecycleStateRemoved,
     WorkflowReadinessDeclared,
     WorkflowConnected,
     WorkflowTransitionUpdated,
@@ -221,7 +224,12 @@ impl ExportedEventType {
             "WorkflowEntryLifecycleCoverageRequired" => {
                 Ok(Self::WorkflowEntryLifecycleCoverageRequired)
             }
+            "WorkflowEntryLifecycleCoverageRemoved" => {
+                Ok(Self::WorkflowEntryLifecycleCoverageRemoved)
+            }
             "WorkflowEntryLifecycleStateAdded" => Ok(Self::WorkflowEntryLifecycleStateAdded),
+            "WorkflowEntryLifecycleStateUpdated" => Ok(Self::WorkflowEntryLifecycleStateUpdated),
+            "WorkflowEntryLifecycleStateRemoved" => Ok(Self::WorkflowEntryLifecycleStateRemoved),
             "WorkflowReadinessDeclared" => Ok(Self::WorkflowReadinessDeclared),
             "WorkflowConnected" => Ok(Self::WorkflowConnected),
             "WorkflowTransitionUpdated" => Ok(Self::WorkflowTransitionUpdated),
@@ -300,7 +308,10 @@ impl AsRef<str> for ExportedEventType {
             Self::WorkflowEntryLifecycleCoverageRequired => {
                 "WorkflowEntryLifecycleCoverageRequired"
             }
+            Self::WorkflowEntryLifecycleCoverageRemoved => "WorkflowEntryLifecycleCoverageRemoved",
             Self::WorkflowEntryLifecycleStateAdded => "WorkflowEntryLifecycleStateAdded",
+            Self::WorkflowEntryLifecycleStateUpdated => "WorkflowEntryLifecycleStateUpdated",
+            Self::WorkflowEntryLifecycleStateRemoved => "WorkflowEntryLifecycleStateRemoved",
             Self::WorkflowReadinessDeclared => "WorkflowReadinessDeclared",
             Self::WorkflowConnected => "WorkflowConnected",
             Self::WorkflowTransitionUpdated => "WorkflowTransitionUpdated",
@@ -2792,6 +2803,68 @@ impl WorkflowEntryLifecycleStateEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct WorkflowEntryLifecycleStateUpdatedEventPayload {
+    workflow: WorkflowSlug,
+    previous: WorkflowEntryLifecycleStateRecord,
+    coverage: WorkflowEntryLifecycleStateRecord,
+}
+
+impl WorkflowEntryLifecycleStateUpdatedEventPayload {
+    fn from_parts(
+        workflow: &WorkflowSlug,
+        previous: &WorkflowEntryLifecycleStateRecord,
+        coverage: &WorkflowEntryLifecycleStateRecord,
+    ) -> Self {
+        Self {
+            workflow: workflow.clone(),
+            previous: previous.clone(),
+            coverage: coverage.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            workflow: workflow_slug(required_str(payload, "workflow")?)?,
+            previous: WorkflowEntryLifecycleStateRecord::new(
+                workflow_entry_lifecycle_state_name(required_str(payload, "previous_state")?)?,
+                workflow_transition_endpoint(required_str(payload, "previous_step")?)?,
+                workflow_entry_lifecycle_evidence_text(required_str(
+                    payload,
+                    "previous_evidence",
+                )?)?,
+            ),
+            coverage: WorkflowEntryLifecycleStateRecord::new(
+                workflow_entry_lifecycle_state_name(required_str(payload, "state")?)?,
+                workflow_transition_endpoint(required_str(payload, "step")?)?,
+                workflow_entry_lifecycle_evidence_text(required_str(payload, "evidence")?)?,
+            ),
+        })
+    }
+
+    fn into_parts(
+        self,
+    ) -> (
+        WorkflowSlug,
+        WorkflowEntryLifecycleStateRecord,
+        WorkflowEntryLifecycleStateRecord,
+    ) {
+        (self.workflow, self.previous, self.coverage)
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "workflow": self.workflow.as_ref(),
+            "previous_state": self.previous.state().as_ref(),
+            "previous_step": self.previous.step().as_ref(),
+            "previous_evidence": self.previous.evidence().as_ref(),
+            "state": self.coverage.state().as_ref(),
+            "step": self.coverage.step().as_ref(),
+            "evidence": self.coverage.evidence().as_ref(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct WorkflowReadinessDeclaredEventPayload {
     workflow: WorkflowSlug,
     projection_fingerprint: ProjectionFingerprint,
@@ -2925,7 +2998,19 @@ pub(crate) enum ExportedEventBody {
     WorkflowEntryLifecycleCoverageRequired {
         workflow: WorkflowSlug,
     },
+    WorkflowEntryLifecycleCoverageRemoved {
+        workflow: WorkflowSlug,
+    },
     WorkflowEntryLifecycleStateAdded {
+        workflow: WorkflowSlug,
+        coverage: WorkflowEntryLifecycleStateRecord,
+    },
+    WorkflowEntryLifecycleStateUpdated {
+        workflow: WorkflowSlug,
+        previous: WorkflowEntryLifecycleStateRecord,
+        coverage: WorkflowEntryLifecycleStateRecord,
+    },
+    WorkflowEntryLifecycleStateRemoved {
         workflow: WorkflowSlug,
         coverage: WorkflowEntryLifecycleStateRecord,
     },
@@ -3119,7 +3204,10 @@ impl ExportedEventBody {
             | Self::WorkflowTransitionEvidenceUpdated { .. }
             | Self::WorkflowTransitionEvidenceRemoved { .. }
             | Self::WorkflowEntryLifecycleCoverageRequired { .. }
+            | Self::WorkflowEntryLifecycleCoverageRemoved { .. }
             | Self::WorkflowEntryLifecycleStateAdded { .. }
+            | Self::WorkflowEntryLifecycleStateUpdated { .. }
+            | Self::WorkflowEntryLifecycleStateRemoved { .. }
             | Self::WorkflowReadinessDeclared { .. }
             | Self::WorkflowConnected { .. }
             | Self::WorkflowTransitionUpdated { .. }
@@ -3258,8 +3346,17 @@ impl ExportedEventBody {
             Self::WorkflowEntryLifecycleCoverageRequired { .. } => {
                 ExportedEventType::WorkflowEntryLifecycleCoverageRequired
             }
+            Self::WorkflowEntryLifecycleCoverageRemoved { .. } => {
+                ExportedEventType::WorkflowEntryLifecycleCoverageRemoved
+            }
             Self::WorkflowEntryLifecycleStateAdded { .. } => {
                 ExportedEventType::WorkflowEntryLifecycleStateAdded
+            }
+            Self::WorkflowEntryLifecycleStateUpdated { .. } => {
+                ExportedEventType::WorkflowEntryLifecycleStateUpdated
+            }
+            Self::WorkflowEntryLifecycleStateRemoved { .. } => {
+                ExportedEventType::WorkflowEntryLifecycleStateRemoved
             }
             Self::WorkflowReadinessDeclared { .. } => ExportedEventType::WorkflowReadinessDeclared,
             Self::WorkflowConnected { .. } => ExportedEventType::WorkflowConnected,
@@ -3373,13 +3470,23 @@ impl ExportedEventBody {
                 workflow, previous, evidence,
             )
             .to_json_value(),
-            Self::WorkflowEntryLifecycleCoverageRequired { workflow } => {
+            Self::WorkflowEntryLifecycleCoverageRequired { workflow }
+            | Self::WorkflowEntryLifecycleCoverageRemoved { workflow } => {
                 json!({ "workflow": workflow.as_ref() })
             }
-            Self::WorkflowEntryLifecycleStateAdded { workflow, coverage } => {
+            Self::WorkflowEntryLifecycleStateAdded { workflow, coverage }
+            | Self::WorkflowEntryLifecycleStateRemoved { workflow, coverage } => {
                 WorkflowEntryLifecycleStateEventPayload::from_parts(workflow, coverage)
                     .to_json_value()
             }
+            Self::WorkflowEntryLifecycleStateUpdated {
+                workflow,
+                previous,
+                coverage,
+            } => WorkflowEntryLifecycleStateUpdatedEventPayload::from_parts(
+                workflow, previous, coverage,
+            )
+            .to_json_value(),
             Self::WorkflowReadinessDeclared {
                 workflow,
                 projection_fingerprint,
@@ -3645,7 +3752,10 @@ impl ExportedEventBody {
             | ExportedEventType::WorkflowTransitionEvidenceUpdated
             | ExportedEventType::WorkflowTransitionEvidenceRemoved
             | ExportedEventType::WorkflowEntryLifecycleCoverageRequired
-            | ExportedEventType::WorkflowEntryLifecycleStateAdded => {
+            | ExportedEventType::WorkflowEntryLifecycleCoverageRemoved
+            | ExportedEventType::WorkflowEntryLifecycleStateAdded
+            | ExportedEventType::WorkflowEntryLifecycleStateUpdated
+            | ExportedEventType::WorkflowEntryLifecycleStateRemoved => {
                 Self::workflow_fact_from_event_type_and_payload(event_type, payload)
             }
             ExportedEventType::WorkflowReadinessDeclared => {
@@ -3764,8 +3874,31 @@ impl ExportedEventBody {
                     WorkflowTransitionEvidenceEventPayload::from_json_value(payload)?.into_parts();
                 Ok(Self::WorkflowTransitionEvidenceRemoved { workflow, evidence })
             }
+            ExportedEventType::WorkflowEntryLifecycleCoverageRequired
+            | ExportedEventType::WorkflowEntryLifecycleCoverageRemoved
+            | ExportedEventType::WorkflowEntryLifecycleStateAdded
+            | ExportedEventType::WorkflowEntryLifecycleStateUpdated
+            | ExportedEventType::WorkflowEntryLifecycleStateRemoved => {
+                Self::workflow_entry_lifecycle_from_event_type_and_payload(event_type, payload)
+            }
+            _ => Err(
+                "workflow_fact_from_event_type_and_payload received a non-fact event".to_owned(),
+            ),
+        }
+    }
+
+    fn workflow_entry_lifecycle_from_event_type_and_payload(
+        event_type: ExportedEventType,
+        payload: &Value,
+    ) -> Result<Self, String> {
+        match event_type {
             ExportedEventType::WorkflowEntryLifecycleCoverageRequired => {
                 Ok(Self::WorkflowEntryLifecycleCoverageRequired {
+                    workflow: workflow_slug(required_str(payload, "workflow")?)?,
+                })
+            }
+            ExportedEventType::WorkflowEntryLifecycleCoverageRemoved => {
+                Ok(Self::WorkflowEntryLifecycleCoverageRemoved {
                     workflow: workflow_slug(required_str(payload, "workflow")?)?,
                 })
             }
@@ -3774,9 +3907,22 @@ impl ExportedEventBody {
                     WorkflowEntryLifecycleStateEventPayload::from_json_value(payload)?.into_parts();
                 Ok(Self::WorkflowEntryLifecycleStateAdded { workflow, coverage })
             }
-            _ => Err(
-                "workflow_fact_from_event_type_and_payload received a non-fact event".to_owned(),
-            ),
+            ExportedEventType::WorkflowEntryLifecycleStateUpdated => {
+                let (workflow, previous, coverage) =
+                    WorkflowEntryLifecycleStateUpdatedEventPayload::from_json_value(payload)?
+                        .into_parts();
+                Ok(Self::WorkflowEntryLifecycleStateUpdated {
+                    workflow,
+                    previous,
+                    coverage,
+                })
+            }
+            ExportedEventType::WorkflowEntryLifecycleStateRemoved => {
+                let (workflow, coverage) =
+                    WorkflowEntryLifecycleStateEventPayload::from_json_value(payload)?.into_parts();
+                Ok(Self::WorkflowEntryLifecycleStateRemoved { workflow, coverage })
+            }
+            _ => Err("workflow_entry_lifecycle_from_event_type_and_payload received a non-lifecycle event".to_owned()),
         }
     }
 
@@ -4393,6 +4539,15 @@ impl EventDraft {
         }
     }
 
+    pub(crate) fn workflow_entry_lifecycle_coverage_removed(workflow: &WorkflowSlug) -> Self {
+        Self {
+            stream_id: EventStreamId::workflow(workflow),
+            body: ExportedEventBody::WorkflowEntryLifecycleCoverageRemoved {
+                workflow: workflow.clone(),
+            },
+        }
+    }
+
     pub(crate) fn workflow_entry_lifecycle_state_added(
         workflow: &WorkflowSlug,
         coverage: &WorkflowEntryLifecycleStateRecord,
@@ -4400,6 +4555,34 @@ impl EventDraft {
         Self {
             stream_id: EventStreamId::workflow(workflow),
             body: ExportedEventBody::WorkflowEntryLifecycleStateAdded {
+                workflow: workflow.clone(),
+                coverage: coverage.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn workflow_entry_lifecycle_state_updated(
+        workflow: &WorkflowSlug,
+        previous: &WorkflowEntryLifecycleStateRecord,
+        coverage: &WorkflowEntryLifecycleStateRecord,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::workflow(workflow),
+            body: ExportedEventBody::WorkflowEntryLifecycleStateUpdated {
+                workflow: workflow.clone(),
+                previous: previous.clone(),
+                coverage: coverage.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn workflow_entry_lifecycle_state_removed(
+        workflow: &WorkflowSlug,
+        coverage: &WorkflowEntryLifecycleStateRecord,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::workflow(workflow),
+            body: ExportedEventBody::WorkflowEntryLifecycleStateRemoved {
                 workflow: workflow.clone(),
                 coverage: coverage.clone(),
             },
@@ -5233,7 +5416,10 @@ impl ProjectedModel {
             | EmcEvent::WorkflowTransitionEvidenceUpdated { .. }
             | EmcEvent::WorkflowTransitionEvidenceRemoved { .. }
             | EmcEvent::WorkflowEntryLifecycleCoverageRequired { .. }
-            | EmcEvent::WorkflowEntryLifecycleStateAdded { .. } => {
+            | EmcEvent::WorkflowEntryLifecycleCoverageRemoved { .. }
+            | EmcEvent::WorkflowEntryLifecycleStateAdded { .. }
+            | EmcEvent::WorkflowEntryLifecycleStateUpdated { .. }
+            | EmcEvent::WorkflowEntryLifecycleStateRemoved { .. } => {
                 Self::apply_workflow_event(model, event)
             }
             EmcEvent::SliceAdded { .. } => Self::apply_slice_added(model, event),
@@ -5353,8 +5539,13 @@ impl ProjectedModel {
             EmcEvent::WorkflowEntryLifecycleCoverageRequired { workflow, .. } => {
                 Self::apply_workflow_entry_lifecycle_coverage_required(model, &workflow)
             }
-            EmcEvent::WorkflowEntryLifecycleStateAdded { .. } => {
-                Self::apply_workflow_entry_lifecycle_state_added(model, event)
+            EmcEvent::WorkflowEntryLifecycleCoverageRemoved { workflow, .. } => {
+                Self::apply_workflow_entry_lifecycle_coverage_removed(model, &workflow)
+            }
+            EmcEvent::WorkflowEntryLifecycleStateAdded { .. }
+            | EmcEvent::WorkflowEntryLifecycleStateUpdated { .. }
+            | EmcEvent::WorkflowEntryLifecycleStateRemoved { .. } => {
+                Self::apply_workflow_entry_lifecycle_state_event(model, event)
             }
             _ => Err("apply_workflow_event received a non-workflow event".to_owned()),
         }
@@ -6593,30 +6784,66 @@ impl ProjectedModel {
         Ok(Some(model))
     }
 
-    fn apply_workflow_entry_lifecycle_state_added(
+    fn apply_workflow_entry_lifecycle_coverage_removed(
+        model: Option<Self>,
+        workflow: &WorkflowSlug,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "WorkflowEntryLifecycleCoverageRemoved")?;
+        model
+            .workflow_mut(workflow, "WorkflowEntryLifecycleCoverageRemoved")?
+            .requires_entry_lifecycle_coverage = false;
+        Ok(Some(model))
+    }
+
+    fn apply_workflow_entry_lifecycle_state_event(
         model: Option<Self>,
         event: EmcEvent,
     ) -> Result<Option<Self>, String> {
-        let EmcEvent::WorkflowEntryLifecycleStateAdded {
-            workflow,
-            state,
-            step,
-            evidence,
-            ..
-        } = event
-        else {
-            return Err(
-                "apply_workflow_entry_lifecycle_state_added requires WorkflowEntryLifecycleStateAdded"
+        match event {
+            EmcEvent::WorkflowEntryLifecycleStateAdded {
+                workflow,
+                state,
+                step,
+                evidence,
+                ..
+            } => {
+                let mut model = Self::require(model, "WorkflowEntryLifecycleStateAdded")?;
+                let record = WorkflowEntryLifecycleStateRecord::new(state, step, evidence);
+                model
+                    .workflow_mut(&workflow, "WorkflowEntryLifecycleStateAdded")?
+                    .entry_lifecycle_states
+                    .push(record);
+                Ok(Some(model))
+            }
+            EmcEvent::WorkflowEntryLifecycleStateUpdated { coverage, .. } => {
+                let mut model = Self::require(model, "WorkflowEntryLifecycleStateUpdated")?;
+                let workflow = coverage.workflow().clone();
+                let previous = coverage.previous().clone();
+                model
+                    .workflow_mut(&workflow, "WorkflowEntryLifecycleStateUpdated")?
+                    .entry_lifecycle_states
+                    .retain(|existing| existing != &previous);
+                model
+                    .workflow_mut(&workflow, "WorkflowEntryLifecycleStateUpdated")?
+                    .entry_lifecycle_states
+                    .push(coverage.replacement().clone());
+                Ok(Some(model))
+            }
+            EmcEvent::WorkflowEntryLifecycleStateRemoved { coverage, .. } => {
+                let mut model = Self::require(model, "WorkflowEntryLifecycleStateRemoved")?;
+                let workflow = coverage.workflow().clone();
+                let record = coverage.coverage().clone();
+                model
+                    .workflow_mut(&workflow, "WorkflowEntryLifecycleStateRemoved")?
+                    .entry_lifecycle_states
+                    .retain(|existing| existing != &record);
+                Ok(Some(model))
+            }
+            _ => Err(
+                "apply_workflow_entry_lifecycle_state_event requires a workflow entry lifecycle state event"
                     .to_owned(),
-            );
-        };
-        let mut model = Self::require(model, "WorkflowEntryLifecycleStateAdded")?;
-        let record = WorkflowEntryLifecycleStateRecord::new(state, step, evidence);
-        model
-            .workflow_mut(&workflow, "WorkflowEntryLifecycleStateAdded")?
-            .entry_lifecycle_states
-            .push(record);
-        Ok(Some(model))
+            ),
+        }
     }
 
     fn apply_review_recorded(model: Option<Self>, event: EmcEvent) -> Result<Option<Self>, String> {

@@ -749,6 +749,65 @@ impl WorkflowEntryLifecycleStateEffect {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowEntryLifecycleStateUpdateEffect {
+    workflow_slug: WorkflowSlug,
+    previous: WorkflowEntryLifecycleStateRecord,
+    replacement: WorkflowEntryLifecycleStateRecord,
+}
+
+impl WorkflowEntryLifecycleStateUpdateEffect {
+    pub(crate) fn new(
+        workflow_slug: WorkflowSlug,
+        previous: WorkflowEntryLifecycleStateRecord,
+        replacement: WorkflowEntryLifecycleStateRecord,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            previous,
+            replacement,
+        }
+    }
+
+    pub(crate) fn workflow_slug(&self) -> &WorkflowSlug {
+        &self.workflow_slug
+    }
+
+    pub(crate) fn previous(&self) -> &WorkflowEntryLifecycleStateRecord {
+        &self.previous
+    }
+
+    pub(crate) fn replacement(&self) -> &WorkflowEntryLifecycleStateRecord {
+        &self.replacement
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowEntryLifecycleStateRemovalEffect {
+    workflow_slug: WorkflowSlug,
+    coverage: WorkflowEntryLifecycleStateRecord,
+}
+
+impl WorkflowEntryLifecycleStateRemovalEffect {
+    pub(crate) fn new(
+        workflow_slug: WorkflowSlug,
+        coverage: WorkflowEntryLifecycleStateRecord,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            coverage,
+        }
+    }
+
+    pub(crate) fn workflow_slug(&self) -> &WorkflowSlug {
+        &self.workflow_slug
+    }
+
+    pub(crate) fn coverage(&self) -> &WorkflowEntryLifecycleStateRecord {
+        &self.coverage
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct CleanReviewEffect {
     workflow_slug: WorkflowSlug,
     reviewer_id: ReviewerId,
@@ -1335,6 +1394,8 @@ pub(crate) enum Effect {
     UpdateWorkflowTransitionEvidenceFromWorkflow(WorkflowTransitionEvidenceUpdateEffect),
     RemoveWorkflowTransitionEvidenceFromWorkflow(WorkflowTransitionEvidenceRemovalEffect),
     AddWorkflowEntryLifecycleStateFromWorkflow(WorkflowEntryLifecycleStateEffect),
+    UpdateWorkflowEntryLifecycleStateFromWorkflow(WorkflowEntryLifecycleStateUpdateEffect),
+    RemoveWorkflowEntryLifecycleStateFromWorkflow(WorkflowEntryLifecycleStateRemovalEffect),
     CheckCurrentProject,
     ConnectWorkflowFromWorkflow(WorkflowConnection),
     UpdateTransitionFromWorkflow(WorkflowTransitionUpdate),
@@ -1355,6 +1416,7 @@ pub(crate) enum Effect {
     RecordCleanReviewFromWorkflow(CleanReviewEffect),
     DeclareWorkflowReadinessFromWorkflow(WorkflowReadinessEffect),
     RequireWorkflowEntryLifecycleCoverageFromWorkflow(WorkflowSlug),
+    RemoveWorkflowEntryLifecycleCoverageFromWorkflow(WorkflowSlug),
     RemoveFile(ProjectPath),
     RemoveSliceFromWorkflow(SliceSlug),
     RemoveTransitionFromWorkflow(WorkflowTransitionRemoval),
