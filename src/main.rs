@@ -19,7 +19,9 @@ mod io;
 mod mcp;
 mod shell;
 
-use crate::core::connection::{ConnectionKind, WorkflowConnection, WorkflowTransitionRemoval};
+use crate::core::connection::{
+    ConnectionKind, WorkflowConnection, WorkflowTransitionRemoval, WorkflowTransitionUpdate,
+};
 use crate::core::effect::{ArtifactDigest, ChosenEventId, EventConflictId};
 use crate::core::formal_slice_facts::{
     CommandErrorDefinitions, CommandErrorNames, CommandInputProvenanceChain, CommandInputSource,
@@ -39,10 +41,10 @@ use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
     AutomationName, BoardElementName, CommandInputSourceKind, CommandName, ControlName,
     ControlRecoveryBehavior, EventAttributeSourceField, EventAttributeSourceName, EventName,
-    ModelDescription, ModelName, OutcomeLabelName, ReadModelFieldSourceKind, ReadModelName,
-    ReviewTimestamp, ReviewerId, ScenarioName, SketchToken, SliceSlug, TranslationName, ViewName,
-    WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
-    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
+    ModelDescription, ModelName, OutcomeLabelName, PayloadContractName, ReadModelFieldSourceKind,
+    ReadModelName, ReviewTimestamp, ReviewerId, ScenarioName, SketchToken, SliceSlug,
+    TranslationName, ViewName, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord,
+    WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
     WorkflowTransitionEvidenceNavigationEndpoints, WorkflowTransitionEvidenceRecord,
     WorkflowTransitionKind,
 };
@@ -292,6 +294,9 @@ enum Command {
     },
     RemoveTransition {
         removal: WorkflowTransitionRemoval,
+    },
+    UpdateTransition {
+        update: WorkflowTransitionUpdate,
     },
     RemoveSlice {
         slug: SliceSlug,
@@ -627,6 +632,7 @@ fn run_definition_removal_commands(command: Command) -> Result<(), ShellError> {
 fn run_remaining_mutation_commands(command: Command) -> Result<(), ShellError> {
     match command {
         Command::RemoveTransition { removal } => interpret(&command::remove_transition(removal)),
+        Command::UpdateTransition { update } => interpret(&command::update_transition(update)),
         Command::RemoveWorkflow { slug } => interpret(&command::remove_workflow(slug)),
         Command::ResolveConflict {
             conflict_id,
@@ -5071,7 +5077,400 @@ fn parse_cli_47(arguments: &[String]) -> Result<Cli, ShellError> {
     }
 }
 
+#[derive(Clone, Copy)]
+struct TransitionIdentityCli<'a> {
+    workflow: &'a str,
+    source: &'a str,
+    target: &'a str,
+    via: &'a str,
+    name: &'a str,
+}
+
+impl<'a> TransitionIdentityCli<'a> {
+    fn new(
+        workflow: &'a str,
+        source: &'a str,
+        target: &'a str,
+        via: &'a str,
+        name: &'a str,
+    ) -> Self {
+        Self {
+            workflow,
+            source,
+            target,
+            via,
+            name,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct TransitionReplacementCli<'a> {
+    source: &'a str,
+    target: &'a str,
+    via: &'a str,
+    name: &'a str,
+}
+
+impl<'a> TransitionReplacementCli<'a> {
+    fn new(source: &'a str, target: &'a str, via: &'a str, name: &'a str) -> Self {
+        Self {
+            source,
+            target,
+            via,
+            name,
+        }
+    }
+}
+
+fn parse_slice_transition_update(
+    previous: TransitionIdentityCli<'_>,
+    replacement: TransitionReplacementCli<'_>,
+    payload_contract: Option<PayloadContractName>,
+) -> Result<WorkflowTransitionUpdate, ShellError> {
+    let workflow_slug = parse_workflow_slug(previous.workflow)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let source_slug = parse_slice_slug(previous.source)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let target_slug = parse_slice_slug(previous.target)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let connection_kind = parse_connection_kind(previous.via)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let trigger = parse_transition_trigger_name(previous.name)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let new_source_slug = parse_slice_slug(replacement.source)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let new_target_slug = parse_slice_slug(replacement.target)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let new_connection_kind = parse_connection_kind(replacement.via)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let new_trigger = parse_transition_trigger_name(replacement.name)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let previous = WorkflowTransitionRemoval::new(
+        workflow_slug.clone(),
+        source_slug,
+        target_slug,
+        connection_kind,
+        trigger,
+    );
+    let replacement = match payload_contract {
+        Some(payload_contract) => WorkflowConnection::new_with_payload_contract(
+            workflow_slug,
+            new_source_slug,
+            new_target_slug,
+            new_connection_kind,
+            new_trigger,
+            payload_contract,
+        ),
+        None => WorkflowConnection::new(
+            workflow_slug,
+            new_source_slug,
+            new_target_slug,
+            new_connection_kind,
+            new_trigger,
+        ),
+    };
+    Ok(WorkflowTransitionUpdate::new(previous, replacement))
+}
+
+fn parse_navigation_transition_update(
+    previous: TransitionIdentityCli<'_>,
+    replacement: TransitionReplacementCli<'_>,
+    source_control: &str,
+    target_view: &str,
+) -> Result<WorkflowTransitionUpdate, ShellError> {
+    let workflow_slug = parse_workflow_slug(previous.workflow)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let source_slug = parse_slice_slug(previous.source)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let target_slug = parse_slice_slug(previous.target)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let connection_kind = parse_connection_kind(previous.via)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let trigger = parse_transition_trigger_name(previous.name)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let new_source_slug = parse_slice_slug(replacement.source)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let new_target_slug = parse_slice_slug(replacement.target)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let new_connection_kind = parse_connection_kind(replacement.via)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let new_trigger = parse_transition_trigger_name(replacement.name)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let source_control = parse_transition_trigger_name(source_control)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let target_view = parse_workflow_owned_definition_name(target_view)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let previous = WorkflowTransitionRemoval::new(
+        workflow_slug.clone(),
+        source_slug,
+        target_slug,
+        connection_kind,
+        trigger,
+    );
+    let replacement = WorkflowConnection::new_with_navigation_endpoints(
+        workflow_slug,
+        new_source_slug,
+        new_target_slug,
+        new_connection_kind,
+        new_trigger,
+        source_control,
+        target_view,
+    );
+    Ok(WorkflowTransitionUpdate::new(previous, replacement))
+}
+
+fn parse_workflow_exit_transition_update(
+    previous: TransitionIdentityCli<'_>,
+    replacement: TransitionReplacementCli<'_>,
+    reason: &str,
+) -> Result<WorkflowTransitionUpdate, ShellError> {
+    let workflow_slug = parse_workflow_slug(previous.workflow)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let source_slug = parse_slice_slug(previous.source)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let target_slug = parse_workflow_slug(previous.target)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let connection_kind = parse_connection_kind(previous.via)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let trigger = parse_transition_trigger_name(previous.name)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let new_source_slug = parse_slice_slug(replacement.source)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let new_target_slug = parse_workflow_slug(replacement.target)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let new_connection_kind = parse_connection_kind(replacement.via)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let new_trigger = parse_transition_trigger_name(replacement.name)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let reason =
+        parse_model_description(reason).map_err(|error| ShellError::message(error.to_string()))?;
+    let previous = WorkflowTransitionRemoval::new_workflow_exit(
+        workflow_slug.clone(),
+        source_slug,
+        target_slug,
+        connection_kind,
+        trigger,
+    );
+    let replacement = WorkflowConnection::new_workflow_exit(
+        workflow_slug,
+        new_source_slug,
+        new_target_slug,
+        new_connection_kind,
+        new_trigger,
+        reason,
+    );
+    Ok(WorkflowTransitionUpdate::new(previous, replacement))
+}
+
 fn parse_cli_48(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
+        [
+            command,
+            subject,
+            workflow_flag,
+            workflow,
+            from_flag,
+            source,
+            to_flag,
+            target,
+            via_flag,
+            via,
+            name_flag,
+            name,
+            new_from_flag,
+            new_source,
+            new_to_flag,
+            new_target,
+            new_via_flag,
+            new_via,
+            new_name_flag,
+            new_name,
+        ] if command == "update"
+            && subject == "transition"
+            && workflow_flag == "--workflow"
+            && from_flag == "--from"
+            && to_flag == "--to"
+            && via_flag == "--via"
+            && name_flag == "--name"
+            && new_from_flag == "--new-from"
+            && new_to_flag == "--new-to"
+            && new_via_flag == "--new-via"
+            && new_name_flag == "--new-name" =>
+        {
+            let update = parse_slice_transition_update(
+                TransitionIdentityCli::new(workflow, source, target, via, name),
+                TransitionReplacementCli::new(new_source, new_target, new_via, new_name),
+                None,
+            )?;
+            Ok(Cli {
+                command: Command::UpdateTransition { update },
+            })
+        }
+        _ => parse_cli_transition_update_with_payload(arguments),
+    }
+}
+
+fn parse_cli_transition_update_with_payload(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
+        [
+            command,
+            subject,
+            workflow_flag,
+            workflow,
+            from_flag,
+            source,
+            to_flag,
+            target,
+            via_flag,
+            via,
+            name_flag,
+            name,
+            new_from_flag,
+            new_source,
+            new_to_flag,
+            new_target,
+            new_via_flag,
+            new_via,
+            new_name_flag,
+            new_name,
+            payload_contract_flag,
+            payload_contract,
+        ] if command == "update"
+            && subject == "transition"
+            && workflow_flag == "--workflow"
+            && from_flag == "--from"
+            && to_flag == "--to"
+            && via_flag == "--via"
+            && name_flag == "--name"
+            && new_from_flag == "--new-from"
+            && new_to_flag == "--new-to"
+            && new_via_flag == "--new-via"
+            && new_name_flag == "--new-name"
+            && payload_contract_flag == "--new-payload-contract" =>
+        {
+            let payload_contract = parse_payload_contract_name(payload_contract)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let update = parse_slice_transition_update(
+                TransitionIdentityCli::new(workflow, source, target, via, name),
+                TransitionReplacementCli::new(new_source, new_target, new_via, new_name),
+                Some(payload_contract),
+            )?;
+            Ok(Cli {
+                command: Command::UpdateTransition { update },
+            })
+        }
+        _ => parse_cli_transition_update_navigation(arguments),
+    }
+}
+
+fn parse_cli_transition_update_navigation(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
+        [
+            command,
+            subject,
+            workflow_flag,
+            workflow,
+            from_flag,
+            source,
+            to_flag,
+            target,
+            via_flag,
+            via,
+            name_flag,
+            name,
+            new_from_flag,
+            new_source,
+            new_to_flag,
+            new_target,
+            new_via_flag,
+            new_via,
+            new_name_flag,
+            new_name,
+            source_control_flag,
+            source_control,
+            target_view_flag,
+            target_view,
+        ] if command == "update"
+            && subject == "transition"
+            && workflow_flag == "--workflow"
+            && from_flag == "--from"
+            && to_flag == "--to"
+            && via_flag == "--via"
+            && name_flag == "--name"
+            && new_from_flag == "--new-from"
+            && new_to_flag == "--new-to"
+            && new_via_flag == "--new-via"
+            && new_name_flag == "--new-name"
+            && source_control_flag == "--new-source-control"
+            && target_view_flag == "--new-target-view" =>
+        {
+            let update = parse_navigation_transition_update(
+                TransitionIdentityCli::new(workflow, source, target, via, name),
+                TransitionReplacementCli::new(new_source, new_target, new_via, new_name),
+                source_control,
+                target_view,
+            )?;
+            Ok(Cli {
+                command: Command::UpdateTransition { update },
+            })
+        }
+        _ => parse_cli_transition_update_workflow_exit(arguments),
+    }
+}
+
+fn parse_cli_transition_update_workflow_exit(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
+        [
+            command,
+            subject,
+            workflow_flag,
+            workflow,
+            from_flag,
+            source,
+            to_workflow_flag,
+            target,
+            via_flag,
+            via,
+            name_flag,
+            name,
+            new_from_flag,
+            new_source,
+            new_to_workflow_flag,
+            new_target,
+            new_via_flag,
+            new_via,
+            new_name_flag,
+            new_name,
+            reason_flag,
+            reason,
+        ] if command == "update"
+            && subject == "transition"
+            && workflow_flag == "--workflow"
+            && from_flag == "--from"
+            && to_workflow_flag == "--to-workflow"
+            && via_flag == "--via"
+            && name_flag == "--name"
+            && new_from_flag == "--new-from"
+            && new_to_workflow_flag == "--new-to-workflow"
+            && new_via_flag == "--new-via"
+            && new_name_flag == "--new-name"
+            && reason_flag == "--new-reason" =>
+        {
+            let update = parse_workflow_exit_transition_update(
+                TransitionIdentityCli::new(workflow, source, target, via, name),
+                TransitionReplacementCli::new(new_source, new_target, new_via, new_name),
+                reason,
+            )?;
+            Ok(Cli {
+                command: Command::UpdateTransition { update },
+            })
+        }
+        _ => parse_cli_transition_removal(arguments),
+    }
+}
+
+fn parse_cli_transition_removal(arguments: &[String]) -> Result<Cli, ShellError> {
     match arguments {
         [
             command,

@@ -1,6 +1,8 @@
 // Copyright 2026 John Wilger
 
-use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
+use crate::core::connection::{
+    WorkflowConnection, WorkflowTransitionRemoval, WorkflowTransitionUpdate,
+};
 use crate::core::effect::{
     ChosenEventId, CleanReviewEffect, Effect, EffectPlan, EventConflictId, EventConflictResolution,
     SliceAutomationDefinitionRemovalEffect, SliceBitLevelDataFlowRemovalEffect,
@@ -380,6 +382,10 @@ pub(crate) fn connect_workflow(connection: WorkflowConnection) -> EffectPlan {
 
 pub(crate) fn remove_transition(removal: WorkflowTransitionRemoval) -> EffectPlan {
     EffectPlan::new(vec![Effect::RemoveTransitionFromWorkflow(removal)])
+}
+
+pub(crate) fn update_transition(update: WorkflowTransitionUpdate) -> EffectPlan {
+    EffectPlan::new(vec![Effect::UpdateTransitionFromWorkflow(update)])
 }
 
 pub(crate) fn remove_workflow(slug: WorkflowSlug) -> EffectPlan {

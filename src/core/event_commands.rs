@@ -6,7 +6,9 @@ use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
-use crate::core::connection::{ConnectionKind, WorkflowConnection, WorkflowTransitionRemoval};
+use crate::core::connection::{
+    ConnectionKind, WorkflowConnection, WorkflowTransitionRemoval, WorkflowTransitionUpdate,
+};
 use crate::core::effect::{
     ChosenEventId, EventConflictId, ModelContentDigest, ProjectionFingerprint, ReviewEventReference,
 };
@@ -160,6 +162,11 @@ pub(crate) enum EmcEvent {
         reason: Option<ModelDescription>,
         source_control: Option<TransitionTriggerName>,
         target_view: Option<WorkflowOwnedDefinitionName>,
+    },
+    WorkflowTransitionUpdated {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        transition: WorkflowTransitionUpdateEvent,
     },
     WorkflowTransitionRemoved {
         stream_id: StreamId,
@@ -358,6 +365,7 @@ impl Event for EmcEvent {
             | Self::WorkflowEntryLifecycleStateAdded { stream_id, .. }
             | Self::WorkflowReadinessDeclared { stream_id, .. }
             | Self::WorkflowConnected { stream_id, .. }
+            | Self::WorkflowTransitionUpdated { stream_id, .. }
             | Self::WorkflowTransitionRemoved { stream_id, .. }
             | Self::SliceAdded { stream_id, .. }
             | Self::SliceUpdated { stream_id, .. }
@@ -644,6 +652,93 @@ impl CommandLogic for ConnectWorkflowCommand {
             target_view: self.connection.target_view().cloned(),
         }]
         .into())
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct UpdateWorkflowTransitionCommand {
+    #[stream]
+    workflow_stream: StreamId,
+    update: WorkflowTransitionUpdate,
+}
+
+impl UpdateWorkflowTransitionCommand {
+    pub(crate) fn from_update(update: WorkflowTransitionUpdate) -> Result<Self, String> {
+        Ok(Self {
+            workflow_stream: workflow_stream_id(update.workflow_slug().as_ref())?,
+            update,
+        })
+    }
+}
+
+impl CommandLogic for UpdateWorkflowTransitionCommand {
+    type Event = EmcEvent;
+    type State = WorkflowCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_workflow_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "workflow stream must exist before transition update"
+        );
+        Ok(vec![EmcEvent::WorkflowTransitionUpdated {
+            stream_id: self.workflow_stream.clone(),
+            transition: WorkflowTransitionUpdateEvent::new(self.update.clone()),
+        }]
+        .into())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowTransitionUpdateEvent {
+    update: WorkflowTransitionUpdate,
+}
+
+impl WorkflowTransitionUpdateEvent {
+    pub(crate) fn new(update: WorkflowTransitionUpdate) -> Self {
+        Self { update }
+    }
+
+    pub(crate) fn workflow(&self) -> &WorkflowSlug {
+        self.update.workflow_slug()
+    }
+
+    pub(crate) fn previous(&self) -> &WorkflowTransitionRemoval {
+        self.update.previous()
+    }
+
+    pub(crate) fn replacement(&self) -> &WorkflowConnection {
+        self.update.replacement()
+    }
+}
+
+impl Serialize for WorkflowTransitionUpdateEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::workflow_transition_updated(&self.update)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for WorkflowTransitionUpdateEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::WorkflowTransitionUpdated { update } => Ok(Self::new(update)),
+            other => Err(DeserializeError::custom(format!(
+                "expected WorkflowTransitionUpdated event body, got {}",
+                other.event_type()
+            ))),
+        }
     }
 }
 

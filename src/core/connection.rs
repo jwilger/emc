@@ -384,6 +384,33 @@ impl WorkflowTransitionRemoval {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowTransitionUpdate {
+    previous: WorkflowTransitionRemoval,
+    replacement: WorkflowConnection,
+}
+
+impl WorkflowTransitionUpdate {
+    pub fn new(previous: WorkflowTransitionRemoval, replacement: WorkflowConnection) -> Self {
+        Self {
+            previous,
+            replacement,
+        }
+    }
+
+    pub fn previous(&self) -> &WorkflowTransitionRemoval {
+        &self.previous
+    }
+
+    pub fn replacement(&self) -> &WorkflowConnection {
+        &self.replacement
+    }
+
+    pub fn workflow_slug(&self) -> &WorkflowSlug {
+        self.previous.workflow_slug()
+    }
+}
+
 pub(crate) fn connect_workflow(
     indexed_workflow_name: &ModelName,
     indexed_workflow_description: &ModelDescription,
@@ -408,6 +435,45 @@ pub(crate) fn connect_workflow(
         &connection.workflow_slug,
         &digest,
         report_line(format!("connected {source} to {target}")),
+    )))
+}
+
+pub(crate) fn update_transition(
+    indexed_workflow_name: &ModelName,
+    indexed_workflow_description: &ModelDescription,
+    workflow_graph: &FormalWorkflowGraph,
+    update: &WorkflowTransitionUpdate,
+) -> Result<EffectPlan, ConnectionMutationError> {
+    validate_workflow_identity(
+        indexed_workflow_name,
+        indexed_workflow_description,
+        workflow_graph,
+    )?;
+    let mut artifact = WorkflowArtifactInputs::collect(workflow_graph);
+    reject_unknown_transition_source(
+        artifact.slice_details_slice(),
+        update.replacement().source(),
+    )?;
+    reject_unknown_transition_target(
+        artifact.slice_details_slice(),
+        update.replacement().target(),
+    )?;
+    let previous_record = removal_transition_record(update.previous())?;
+    let replacement_record = connection_transition_record(update.replacement())?;
+    let transitions = replace_transition(
+        artifact.transitions_slice(),
+        &previous_record,
+        &replacement_record,
+    )?;
+    reject_main_slices_without_incoming_transitions(artifact.slice_details_slice(), &transitions)?;
+    artifact.replace_transitions(transitions);
+    let digest = artifact.digest(update.workflow_slug());
+    let source = update.previous().source().as_ref();
+    let target = update.previous().target().as_ref();
+    Ok(EffectPlan::new(artifact.module_effects(
+        update.workflow_slug(),
+        &digest,
+        report_line(format!("updated transition {source} to {target}")),
     )))
 }
 
@@ -481,6 +547,37 @@ fn retain_transitions_excluding(
         Err(ConnectionMutationError::new(format!(
             "workflow transition {} does not exist",
             transition_record_label(removal_record)
+        )))
+    }
+}
+
+fn replace_transition(
+    transitions: &[WorkflowTransitionRecord],
+    previous: &WorkflowTransitionRecord,
+    replacement: &WorkflowTransitionRecord,
+) -> Result<Vec<WorkflowTransitionRecord>, ConnectionMutationError> {
+    let mut replaced_transition = false;
+    let mut next = Vec::with_capacity(transitions.len());
+    for transition in transitions {
+        if same_transition_identity(transition, previous) {
+            replaced_transition = true;
+            next.push(replacement.clone());
+        } else {
+            if same_transition_identity(transition, replacement) {
+                return Err(ConnectionMutationError::new(format!(
+                    "workflow transition {} already exists",
+                    transition_record_label(replacement)
+                )));
+            }
+            next.push(transition.clone());
+        }
+    }
+    if replaced_transition {
+        Ok(next)
+    } else {
+        Err(ConnectionMutationError::new(format!(
+            "workflow transition {} does not exist",
+            transition_record_label(previous)
         )))
     }
 }
