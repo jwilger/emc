@@ -1235,6 +1235,74 @@ mod tests {
     }
 
     #[test]
+    fn update_transition_replaces_modeled_transition_in_canonical_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let cwd = temp_dir.path();
+
+        init_repair_desk(cwd)?;
+        add_open_ticket_workflow(cwd)?;
+        add_capture_ticket_slice(cwd)?;
+        add_review_ticket_slice(cwd)?;
+        connect_navigation_review_ticket_screen(cwd)?;
+
+        run_emc_stdout(
+            cwd,
+            &[
+                "update",
+                "transition",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+                "--new-from",
+                "capture-ticket",
+                "--new-to",
+                "review-ticket",
+                "--new-via",
+                "navigation",
+                "--new-name",
+                "alternate-review-ticket-screen",
+                "--new-source-control",
+                "alternate-review-ticket-screen",
+                "--new-target-view",
+                "alternate-review-ticket-screen",
+            ],
+            "updated transition capture-ticket to review-ticket",
+        )?;
+
+        run_emc(cwd, &["check"])?;
+
+        let lean = read_lean(cwd)?;
+        let quint = read_quint(cwd)?;
+
+        assert!(
+            !lean.contains("trigger := \"review-ticket-screen\""),
+            "Lean artifact must remove the replaced workflow transition"
+        );
+        assert!(
+            !quint.contains("trigger: \"review-ticket-screen\""),
+            "Quint artifact must remove the replaced workflow transition"
+        );
+        assert!(
+            lean.contains("trigger := \"alternate-review-ticket-screen\""),
+            "Lean artifact must contain the replacement workflow transition"
+        );
+        assert!(
+            quint.contains("trigger: \"alternate-review-ticket-screen\""),
+            "Quint artifact must contain the replacement workflow transition"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn remove_transition_rejects_removing_required_incoming_transition_without_mutating_artifacts()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
@@ -1265,6 +1333,56 @@ mod tests {
                 "review-ticket-screen",
             ],
             "removing transition would leave workflow step 'review-ticket' without an incoming transition",
+        )?;
+
+        assert_open_ticket_artifacts_unchanged(cwd, &before)?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn update_transition_rejects_unknown_transition_without_mutating_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let cwd = temp_dir.path();
+
+        init_repair_desk(cwd)?;
+        add_open_ticket_workflow(cwd)?;
+        add_capture_ticket_slice(cwd)?;
+        add_review_ticket_slice(cwd)?;
+        connect_navigation_review_ticket_screen(cwd)?;
+
+        let before = capture_open_ticket_artifacts(cwd)?;
+
+        run_emc_failure(
+            cwd,
+            &[
+                "update",
+                "transition",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "missing-review-ticket-screen",
+                "--new-from",
+                "capture-ticket",
+                "--new-to",
+                "review-ticket",
+                "--new-via",
+                "navigation",
+                "--new-name",
+                "alternate-review-ticket-screen",
+                "--new-source-control",
+                "alternate-review-ticket-screen",
+                "--new-target-view",
+                "alternate-review-ticket-screen",
+            ],
+            "workflow transition capture-ticket->review-ticket:navigation:missing-review-ticket-screen does not exist",
         )?;
 
         assert_open_ticket_artifacts_unchanged(cwd, &before)?;

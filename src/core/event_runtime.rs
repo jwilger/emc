@@ -26,7 +26,7 @@ use crate::core::event_commands::{
     UpdateOutcomeDefinitionCommand, UpdateReadModelDefinitionCommand, UpdateSliceCommand,
     UpdateSliceScenarioCommand, UpdateTranslationDefinitionCommand, UpdateViewControlCommand,
     UpdateViewDefinitionCommand, UpdateWorkflowCommand, UpdateWorkflowCommandErrorCommand,
-    UpdateWorkflowOutcomeCommand, WorkflowFactInput,
+    UpdateWorkflowOutcomeCommand, UpdateWorkflowTransitionCommand, WorkflowFactInput,
 };
 use crate::core::events::{EventDraft, ExportedEventBody};
 
@@ -160,6 +160,7 @@ async fn dispatch_exported_event(
         | ExportedEventBody::WorkflowRemoved { .. }
         | ExportedEventBody::WorkflowReadinessDeclared { .. }
         | ExportedEventBody::WorkflowConnected { .. }
+        | ExportedEventBody::WorkflowTransitionUpdated { .. }
         | ExportedEventBody::WorkflowTransitionRemoved { .. } => {
             dispatch_workflow_lifecycle(store, body).await
         }
@@ -302,6 +303,13 @@ async fn dispatch_workflow_lifecycle(
             run_command(
                 store,
                 ConnectWorkflowCommand::from_connection(connection.clone())?,
+            )
+            .await
+        }
+        ExportedEventBody::WorkflowTransitionUpdated { update } => {
+            run_command(
+                store,
+                UpdateWorkflowTransitionCommand::from_update(update.clone())?,
             )
             .await
         }

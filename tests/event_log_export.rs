@@ -1370,6 +1370,118 @@ mod tests {
     }
 
     #[test]
+    fn check_rebuilds_workflow_transition_updates_from_exported_events()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        create_project_with_workflow_and_slice(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "review-ticket",
+                "--name",
+                "Review ticket",
+                "--type",
+                "state_view",
+                "--description",
+                "Actor reviews repair ticket details.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
+                "review-ticket-screen",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "transition",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+                "--new-from",
+                "capture-ticket",
+                "--new-to",
+                "review-ticket",
+                "--new-via",
+                "navigation",
+                "--new-name",
+                "alternate-review-ticket-screen",
+                "--new-source-control",
+                "alternate-review-ticket-screen",
+                "--new-target-view",
+                "alternate-review-ticket-screen",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        fs::remove_file(temp_dir.path().join("emc.toml"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/lean"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let workflow_lean = fs::read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let workflow_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        assert!(
+            !workflow_lean.contains("trigger := \"review-ticket-screen\""),
+            "replaced workflow transition must not be rebuilt from exported events"
+        );
+        assert!(
+            !workflow_quint.contains("trigger: \"review-ticket-screen\""),
+            "replaced workflow transition must not be rebuilt from exported events"
+        );
+        assert!(
+            workflow_lean.contains("trigger := \"alternate-review-ticket-screen\""),
+            "replacement workflow transition must be rebuilt from exported events"
+        );
+        assert!(
+            workflow_quint.contains("trigger: \"alternate-review-ticket-screen\""),
+            "replacement workflow transition must be rebuilt from exported events"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn check_rebuilds_slice_views_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;

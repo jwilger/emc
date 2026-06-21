@@ -16,7 +16,9 @@ const DEFAULT_MCP_PROTOCOL_VERSION: &str = "2025-11-25";
 const SUPPORTED_MCP_PROTOCOL_VERSIONS: &[&str] = &["2025-11-25", "2025-06-18", "2024-11-05"];
 
 use crate::command;
-use crate::core::connection::{ConnectionKind, WorkflowConnection, WorkflowTransitionRemoval};
+use crate::core::connection::{
+    ConnectionKind, WorkflowConnection, WorkflowTransitionRemoval, WorkflowTransitionUpdate,
+};
 use crate::core::effect::{ArtifactDigest, ChosenEventId, EventConflictId};
 use crate::core::formal_slice_facts::{
     CommandErrorDefinitions, CommandErrorNames, CommandInputProvenanceChain, CommandInputSource,
@@ -1882,6 +1884,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         remove_workflow_outcome_tool(),
         remove_workflow_command_error_tool(),
         connect_workflow_tool(),
+        update_transition_tool(),
         remove_transition_tool(),
     ]
 }
@@ -2250,6 +2253,69 @@ fn connect_workflow_tool() -> Tool {
     )
 }
 
+fn update_transition_tool() -> Tool {
+    Tool::new(
+        "update_transition",
+        "Update a workflow transition and regenerate synchronized model artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "workflow": {
+                        "type": "string"
+                    },
+                    "from": {
+                        "type": "string"
+                    },
+                    "to": {
+                        "type": "string"
+                    },
+                    "to_workflow": {
+                        "type": "string"
+                    },
+                    "via": {
+                        "type": "string",
+                        "enum": ["command", "event", "navigation", "external_trigger", "outcome"]
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "new_from": {
+                        "type": "string"
+                    },
+                    "new_to": {
+                        "type": "string"
+                    },
+                    "new_to_workflow": {
+                        "type": "string"
+                    },
+                    "new_via": {
+                        "type": "string",
+                        "enum": ["command", "event", "navigation", "external_trigger", "outcome"]
+                    },
+                    "new_name": {
+                        "type": "string"
+                    },
+                    "new_source_control": {
+                        "type": "string",
+                        "description": "Required when new_via is navigation; source-slice-owned control that initiates navigation."
+                    },
+                    "new_target_view": {
+                        "type": "string",
+                        "description": "Required when new_via is navigation; target-slice-owned entry view reached by navigation."
+                    },
+                    "new_reason": {
+                        "type": "string"
+                    },
+                    "new_payload_contract": {
+                        "type": "string"
+                    }
+                },
+                "required": ["workflow", "from", "via", "name", "new_from", "new_via", "new_name"],
+                "additionalProperties": false
+        })),
+    )
+}
+
 fn remove_transition_tool() -> Tool {
     Tool::new(
         "remove_transition",
@@ -2437,6 +2503,7 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "remove_workflow_outcome" => Some(remove_workflow_outcome_tool_text(request)),
         "remove_workflow_command_error" => Some(remove_workflow_command_error_tool_text(request)),
         "connect_workflow" => Some(connect_workflow_tool_text(request)),
+        "update_transition" => Some(update_transition_tool_text(request)),
         "remove_transition" => Some(remove_transition_tool_text(request)),
         _ => None,
     }
@@ -5734,6 +5801,289 @@ fn build_workflow_exit_connection(
         trigger,
         reason,
     ))
+}
+
+fn update_transition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = required_tool_arguments(request, "update_transition")?;
+    interpret_collect_reports(&command::update_transition(
+        transition_update_from_arguments(arguments, "update_transition")?,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn transition_update_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+) -> Result<WorkflowTransitionUpdate, ShellError> {
+    let workflow_slug = arguments
+        .get("workflow")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires workflow")))
+        .and_then(|raw_workflow| {
+            parse_workflow_slug(raw_workflow)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let previous = transition_removal_from_arguments(arguments, tool_name, workflow_slug.clone())?;
+    let replacement =
+        transition_replacement_from_arguments(arguments, tool_name, workflow_slug, "new_")?;
+    Ok(WorkflowTransitionUpdate::new(previous, replacement))
+}
+
+fn transition_removal_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+    workflow_slug: WorkflowSlug,
+) -> Result<WorkflowTransitionRemoval, ShellError> {
+    let source_slug = arguments
+        .get("from")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires from")))
+        .and_then(|raw_source| {
+            parse_slice_slug(raw_source).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let connection_kind = arguments
+        .get("via")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires via")))
+        .and_then(|raw_via| {
+            parse_connection_kind(raw_via).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let trigger = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires name")))
+        .and_then(|raw_name| {
+            parse_transition_trigger_name(raw_name)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    if let Some(raw_target) = arguments.get("to").and_then(Value::as_str) {
+        let target_slug =
+            parse_slice_slug(raw_target).map_err(|error| ShellError::message(error.to_string()))?;
+        Ok(WorkflowTransitionRemoval::new(
+            workflow_slug,
+            source_slug,
+            target_slug,
+            connection_kind,
+            trigger,
+        ))
+    } else {
+        let target_workflow = arguments
+            .get("to_workflow")
+            .and_then(Value::as_str)
+            .ok_or_else(|| ShellError::message(format!("{tool_name} requires to or to_workflow")))
+            .and_then(|raw_target| {
+                parse_workflow_slug(raw_target)
+                    .map_err(|error| ShellError::message(error.to_string()))
+            })?;
+        Ok(WorkflowTransitionRemoval::new_workflow_exit(
+            workflow_slug,
+            source_slug,
+            target_workflow,
+            connection_kind,
+            trigger,
+        ))
+    }
+}
+
+fn transition_replacement_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+    workflow_slug: WorkflowSlug,
+    prefix: &str,
+) -> Result<WorkflowConnection, ShellError> {
+    let source_field = format!("{prefix}from");
+    let via_field = format!("{prefix}via");
+    let name_field = format!("{prefix}name");
+    let source_slug = arguments
+        .get(&source_field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {source_field}")))
+        .and_then(|raw_source| {
+            parse_slice_slug(raw_source).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let connection_kind = arguments
+        .get(&via_field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {via_field}")))
+        .and_then(|raw_via| {
+            parse_connection_kind(raw_via).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let trigger = arguments
+        .get(&name_field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {name_field}")))
+        .and_then(|raw_name| {
+            parse_transition_trigger_name(raw_name)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let source_control = prefixed_optional_transition_trigger(arguments, prefix, "source_control")?;
+    let target_view = prefixed_optional_workflow_definition(arguments, prefix, "target_view")?;
+    let transition = ConnectionTransition {
+        workflow_slug,
+        source_slug,
+        connection_kind,
+        trigger,
+    };
+    let navigation_endpoints = ConnectionNavigationEndpoints {
+        source_control,
+        target_view,
+    };
+    build_prefixed_workflow_connection(
+        arguments,
+        tool_name,
+        prefix,
+        transition,
+        navigation_endpoints,
+    )
+}
+
+fn build_prefixed_workflow_connection(
+    arguments: &Value,
+    tool_name: &str,
+    prefix: &str,
+    transition: ConnectionTransition,
+    navigation_endpoints: ConnectionNavigationEndpoints,
+) -> Result<WorkflowConnection, ShellError> {
+    let to_field = format!("{prefix}to");
+    let to_workflow_field = format!("{prefix}to_workflow");
+    if let Some(raw_target) = arguments.get(&to_field).and_then(Value::as_str) {
+        let target_slug =
+            parse_slice_slug(raw_target).map_err(|error| ShellError::message(error.to_string()))?;
+        build_prefixed_intra_workflow_connection(
+            arguments,
+            prefix,
+            transition,
+            target_slug,
+            navigation_endpoints,
+        )
+    } else {
+        let target_workflow = arguments
+            .get(&to_workflow_field)
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                ShellError::message(format!(
+                    "{tool_name} requires {to_field} or {to_workflow_field}"
+                ))
+            })
+            .and_then(|raw_target| {
+                parse_workflow_slug(raw_target)
+                    .map_err(|error| ShellError::message(error.to_string()))
+            })?;
+        let reason_field = format!("{prefix}reason");
+        let reason = arguments
+            .get(&reason_field)
+            .and_then(Value::as_str)
+            .ok_or_else(|| ShellError::message(format!("{tool_name} requires {reason_field}")))
+            .and_then(|raw_reason| {
+                parse_model_description(raw_reason)
+                    .map_err(|error| ShellError::message(error.to_string()))
+            })?;
+        let ConnectionTransition {
+            workflow_slug,
+            source_slug,
+            connection_kind,
+            trigger,
+        } = transition;
+        Ok(WorkflowConnection::new_workflow_exit(
+            workflow_slug,
+            source_slug,
+            target_workflow,
+            connection_kind,
+            trigger,
+            reason,
+        ))
+    }
+}
+
+fn build_prefixed_intra_workflow_connection(
+    arguments: &Value,
+    prefix: &str,
+    transition: ConnectionTransition,
+    target_slug: SliceSlug,
+    navigation_endpoints: ConnectionNavigationEndpoints,
+) -> Result<WorkflowConnection, ShellError> {
+    let ConnectionTransition {
+        workflow_slug,
+        source_slug,
+        connection_kind,
+        trigger,
+    } = transition;
+    if connection_kind == ConnectionKind::Navigation {
+        return Ok(WorkflowConnection::new_with_navigation_endpoints(
+            workflow_slug,
+            source_slug,
+            target_slug,
+            connection_kind,
+            trigger,
+            navigation_endpoints.source_control.ok_or_else(|| {
+                ShellError::message(
+                    "navigation workflow transitions require source_control owned by source slice",
+                )
+            })?,
+            navigation_endpoints.target_view.ok_or_else(|| {
+                ShellError::message(
+                    "navigation workflow transitions require target_view owned by target slice",
+                )
+            })?,
+        ));
+    }
+    let payload_contract_field = format!("{prefix}payload_contract");
+    match arguments
+        .get(&payload_contract_field)
+        .and_then(Value::as_str)
+    {
+        Some(raw_payload_contract) => {
+            let payload_contract = parse_payload_contract_name(raw_payload_contract)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(WorkflowConnection::new_with_payload_contract(
+                workflow_slug,
+                source_slug,
+                target_slug,
+                connection_kind,
+                trigger,
+                payload_contract,
+            ))
+        }
+        None => Ok(WorkflowConnection::new(
+            workflow_slug,
+            source_slug,
+            target_slug,
+            connection_kind,
+            trigger,
+        )),
+    }
+}
+
+fn prefixed_optional_transition_trigger(
+    arguments: &Value,
+    prefix: &str,
+    field: &str,
+) -> Result<Option<TransitionTriggerName>, ShellError> {
+    let field = format!("{prefix}{field}");
+    arguments
+        .get(&field)
+        .and_then(Value::as_str)
+        .map(|raw| {
+            parse_transition_trigger_name(raw)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })
+        .transpose()
+}
+
+fn prefixed_optional_workflow_definition(
+    arguments: &Value,
+    prefix: &str,
+    field: &str,
+) -> Result<Option<WorkflowOwnedDefinitionName>, ShellError> {
+    let field = format!("{prefix}{field}");
+    arguments
+        .get(&field)
+        .and_then(Value::as_str)
+        .map(|raw| {
+            parse_workflow_owned_definition_name(raw)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })
+        .transpose()
 }
 
 fn remove_transition_tool_text(request: &Value) -> Result<String, ShellError> {

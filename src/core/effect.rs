@@ -4,7 +4,9 @@ use nutype::nutype;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::path::{Component, Path};
 
-use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
+use crate::core::connection::{
+    WorkflowConnection, WorkflowTransitionRemoval, WorkflowTransitionUpdate,
+};
 use crate::core::events::EventDraft;
 use crate::core::formal_slice_facts::{
     NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
@@ -1213,6 +1215,7 @@ pub(crate) enum Effect {
     AddWorkflowEntryLifecycleStateFromWorkflow(WorkflowEntryLifecycleStateEffect),
     CheckCurrentProject,
     ConnectWorkflowFromWorkflow(WorkflowConnection),
+    UpdateTransitionFromWorkflow(WorkflowTransitionUpdate),
     EnsureDirectory(ProjectPath),
     ExportEvent(EventDraft),
     ListConflictsFromEvents,

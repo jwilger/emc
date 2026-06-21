@@ -168,6 +168,91 @@ mod tests {
     }
 
     #[test]
+    fn mcp_stdio_updates_workflow_transition() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(temp_dir.path(), "capture-ticket", "Capture ticket")?;
+        add_slice(temp_dir.path(), "review-ticket", "Review ticket")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
+                "review-ticket-screen",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(update_transition_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"update_transition\""))
+            .stdout(predicate::str::contains(
+                "updated transition capture-ticket to review-ticket",
+            ));
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+
+        assert!(
+            !lean.contains("trigger := \"review-ticket-screen\""),
+            "Lean artifact must remove the replaced workflow transition"
+        );
+        assert!(
+            !quint.contains("trigger: \"review-ticket-screen\""),
+            "Quint artifact must remove the replaced workflow transition"
+        );
+        assert!(
+            lean.contains("trigger := \"alternate-review-ticket-screen\""),
+            "Lean artifact must contain the replacement workflow transition"
+        );
+        assert!(
+            quint.contains("trigger: \"alternate-review-ticket-screen\""),
+            "Quint artifact must contain the replacement workflow transition"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_stdio_rejects_removing_required_workflow_transition() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
@@ -1106,6 +1191,14 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_transition\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_control\":\"review-ticket-screen\",\"target_view\":\"review-ticket-screen\"}}}\n",
+        )
+    }
+
+    fn update_transition_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_transition\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"new_from\":\"capture-ticket\",\"new_to\":\"review-ticket\",\"new_via\":\"navigation\",\"new_name\":\"alternate-review-ticket-screen\",\"new_source_control\":\"alternate-review-ticket-screen\",\"new_target_view\":\"alternate-review-ticket-screen\"}}}\n",
         )
     }
 

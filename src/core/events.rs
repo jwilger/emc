@@ -12,7 +12,7 @@ use sha2::{Digest, Sha256};
 
 use crate::core::connection::{
     ConnectionKind, WorkflowConnection, WorkflowConnectionTarget, WorkflowTransitionRemoval,
-    WorkflowTransitionRemovalTarget,
+    WorkflowTransitionRemovalTarget, WorkflowTransitionUpdate,
 };
 use crate::core::digest::{WorkflowArtifactDigestInput, artifact_digest, slice_artifact_digest};
 use crate::core::effect::{
@@ -27,7 +27,7 @@ use crate::core::emit::quint::{
     emit_slice_module as emit_quint_slice_module,
     emit_workflow_module as emit_quint_workflow_module,
 };
-use crate::core::event_commands::{EmcEvent, SliceFactEvent};
+use crate::core::event_commands::{EmcEvent, SliceFactEvent, WorkflowTransitionUpdateEvent};
 use crate::core::event_runtime::{
     execute_eventcore_command_for_exported_event, list_forks, read_all_emc_events,
     reconcile_choose_branch,
@@ -148,6 +148,7 @@ pub(crate) enum ExportedEventType {
     WorkflowEntryLifecycleStateAdded,
     WorkflowReadinessDeclared,
     WorkflowConnected,
+    WorkflowTransitionUpdated,
     WorkflowTransitionRemoved,
     SliceAdded,
     SliceUpdated,
@@ -215,6 +216,7 @@ impl ExportedEventType {
             "WorkflowEntryLifecycleStateAdded" => Ok(Self::WorkflowEntryLifecycleStateAdded),
             "WorkflowReadinessDeclared" => Ok(Self::WorkflowReadinessDeclared),
             "WorkflowConnected" => Ok(Self::WorkflowConnected),
+            "WorkflowTransitionUpdated" => Ok(Self::WorkflowTransitionUpdated),
             "WorkflowTransitionRemoved" => Ok(Self::WorkflowTransitionRemoved),
             "SliceAdded" => Ok(Self::SliceAdded),
             "SliceUpdated" => Ok(Self::SliceUpdated),
@@ -289,6 +291,7 @@ impl AsRef<str> for ExportedEventType {
             Self::WorkflowEntryLifecycleStateAdded => "WorkflowEntryLifecycleStateAdded",
             Self::WorkflowReadinessDeclared => "WorkflowReadinessDeclared",
             Self::WorkflowConnected => "WorkflowConnected",
+            Self::WorkflowTransitionUpdated => "WorkflowTransitionUpdated",
             Self::WorkflowTransitionRemoved => "WorkflowTransitionRemoved",
             Self::SliceAdded => "SliceAdded",
             Self::SliceUpdated => "SliceUpdated",
@@ -2069,6 +2072,96 @@ impl WorkflowTransitionRemovedEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct WorkflowTransitionUpdatedEventPayload {
+    previous: WorkflowTransitionRemovedEventPayload,
+    replacement: WorkflowConnectedEventPayload,
+}
+
+impl WorkflowTransitionUpdatedEventPayload {
+    fn from_update(update: &WorkflowTransitionUpdate) -> Self {
+        Self {
+            previous: WorkflowTransitionRemovedEventPayload::from_removal(update.previous()),
+            replacement: WorkflowConnectedEventPayload::from_connection(update.replacement()),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            previous: WorkflowTransitionRemovedEventPayload::from_json_value(payload)?,
+            replacement: WorkflowConnectedEventPayload::from_json_value(
+                &Self::replacement_json_value(payload)?,
+            )?,
+        })
+    }
+
+    fn replacement_json_value(payload: &Value) -> Result<Value, String> {
+        let object = payload
+            .as_object()
+            .ok_or_else(|| "WorkflowTransitionUpdated payload must be an object".to_owned())?;
+        let mut replacement = serde_json::Map::new();
+        replacement.insert(
+            "workflow".to_owned(),
+            object
+                .get("workflow")
+                .cloned()
+                .ok_or_else(|| "WorkflowTransitionUpdated is missing workflow".to_owned())?,
+        );
+        for (field, replacement_field) in [
+            ("from", "new_from"),
+            ("to", "new_to"),
+            ("to_workflow", "new_to_workflow"),
+            ("via", "new_via"),
+            ("name", "new_name"),
+            ("payload_contract", "new_payload_contract"),
+            ("reason", "new_reason"),
+            ("source_control", "new_source_control"),
+            ("target_view", "new_target_view"),
+        ] {
+            replacement.insert(
+                field.to_owned(),
+                object
+                    .get(replacement_field)
+                    .cloned()
+                    .unwrap_or(Value::Null),
+            );
+        }
+        Ok(Value::Object(replacement))
+    }
+
+    fn into_update(self) -> WorkflowTransitionUpdate {
+        WorkflowTransitionUpdate::new(
+            self.previous.into_removal(),
+            self.replacement.into_connection(),
+        )
+    }
+
+    fn to_json_value(&self) -> Value {
+        let mut payload = self.previous.to_json_value();
+        if let (Value::Object(fields), Value::Object(replacement)) =
+            (&mut payload, self.replacement.to_json_value())
+        {
+            for (field, replacement_field) in [
+                ("from", "new_from"),
+                ("to", "new_to"),
+                ("to_workflow", "new_to_workflow"),
+                ("via", "new_via"),
+                ("name", "new_name"),
+                ("payload_contract", "new_payload_contract"),
+                ("reason", "new_reason"),
+                ("source_control", "new_source_control"),
+                ("target_view", "new_target_view"),
+            ] {
+                fields.insert(
+                    replacement_field.to_owned(),
+                    replacement.get(field).cloned().unwrap_or(Value::Null),
+                );
+            }
+        }
+        payload
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct WorkflowOutcomeEventPayload {
     workflow: WorkflowSlug,
     outcome: WorkflowOutcomeRecord,
@@ -2627,6 +2720,9 @@ pub(crate) enum ExportedEventBody {
     WorkflowConnected {
         connection: WorkflowConnection,
     },
+    WorkflowTransitionUpdated {
+        update: WorkflowTransitionUpdate,
+    },
     WorkflowTransitionRemoved {
         removal: WorkflowTransitionRemoval,
     },
@@ -2802,6 +2898,7 @@ impl ExportedEventBody {
             | Self::WorkflowEntryLifecycleStateAdded { .. }
             | Self::WorkflowReadinessDeclared { .. }
             | Self::WorkflowConnected { .. }
+            | Self::WorkflowTransitionUpdated { .. }
             | Self::WorkflowTransitionRemoved { .. } => self.workflow_event_type(),
             Self::SliceAdded { .. } => ExportedEventType::SliceAdded,
             Self::SliceUpdated { .. } => ExportedEventType::SliceUpdated,
@@ -2906,6 +3003,7 @@ impl ExportedEventBody {
             }
             Self::WorkflowReadinessDeclared { .. } => ExportedEventType::WorkflowReadinessDeclared,
             Self::WorkflowConnected { .. } => ExportedEventType::WorkflowConnected,
+            Self::WorkflowTransitionUpdated { .. } => ExportedEventType::WorkflowTransitionUpdated,
             Self::WorkflowTransitionRemoved { .. } => ExportedEventType::WorkflowTransitionRemoved,
             _ => self.event_type(),
         }
@@ -3019,6 +3117,9 @@ impl ExportedEventBody {
             .to_json_value(),
             Self::WorkflowConnected { connection } => {
                 WorkflowConnectedEventPayload::from_connection(connection).to_json_value()
+            }
+            Self::WorkflowTransitionUpdated { update } => {
+                WorkflowTransitionUpdatedEventPayload::from_update(update).to_json_value()
             }
             Self::WorkflowTransitionRemoved { removal } => {
                 WorkflowTransitionRemovedEventPayload::from_removal(removal).to_json_value()
@@ -3325,6 +3426,10 @@ impl ExportedEventBody {
             ExportedEventType::WorkflowConnected => Ok(Self::WorkflowConnected {
                 connection: WorkflowConnectedEventPayload::from_json_value(payload)?
                     .into_connection(),
+            }),
+            ExportedEventType::WorkflowTransitionUpdated => Ok(Self::WorkflowTransitionUpdated {
+                update: WorkflowTransitionUpdatedEventPayload::from_json_value(payload)?
+                    .into_update(),
             }),
             ExportedEventType::WorkflowTransitionRemoved => Ok(Self::WorkflowTransitionRemoved {
                 removal: WorkflowTransitionRemovedEventPayload::from_json_value(payload)?
@@ -3930,6 +4035,15 @@ impl EventDraft {
             stream_id: EventStreamId::workflow(connection.workflow_slug()),
             body: ExportedEventBody::WorkflowConnected {
                 connection: connection.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn workflow_transition_updated(update: &WorkflowTransitionUpdate) -> Self {
+        Self {
+            stream_id: EventStreamId::workflow(update.workflow_slug()),
+            body: ExportedEventBody::WorkflowTransitionUpdated {
+                update: update.clone(),
             },
         }
     }
@@ -4707,6 +4821,7 @@ impl ProjectedModel {
             | EmcEvent::WorkflowRemoved { .. }
             | EmcEvent::WorkflowReadinessDeclared { .. }
             | EmcEvent::WorkflowConnected { .. }
+            | EmcEvent::WorkflowTransitionUpdated { .. }
             | EmcEvent::WorkflowTransitionRemoved { .. }
             | EmcEvent::WorkflowOutcomeAdded { .. }
             | EmcEvent::WorkflowOutcomeUpdated { .. }
@@ -4799,6 +4914,9 @@ impl ProjectedModel {
                 Ok(Some(Self::require(model, "WorkflowReadinessDeclared")?))
             }
             EmcEvent::WorkflowConnected { .. } => Self::apply_workflow_connected(model, event),
+            EmcEvent::WorkflowTransitionUpdated { transition, .. } => {
+                Self::apply_workflow_transition_updated(model, &transition)
+            }
             EmcEvent::WorkflowTransitionRemoved { .. } => {
                 Self::apply_workflow_transition_removed(model, event)
             }
@@ -5667,6 +5785,66 @@ impl ProjectedModel {
             .transitions
             .retain(|transition| !same_transition(transition, &removed_transition));
         Ok(Some(model))
+    }
+
+    fn apply_workflow_transition_updated(
+        model: Option<Self>,
+        update: &WorkflowTransitionUpdateEvent,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "WorkflowTransitionUpdated")?;
+        let removed_transition = Self::transition_record_from_removal(update.previous())?;
+        let replacement_transition = Self::transition_record_from_connection(update.replacement())?;
+        let workflow = model.workflow_mut(update.workflow(), "WorkflowTransitionUpdated")?;
+        let mut replaced_transition = false;
+        workflow.transitions.retain(|transition| {
+            if same_transition(transition, &removed_transition) {
+                replaced_transition = true;
+                false
+            } else {
+                true
+            }
+        });
+        if !replaced_transition {
+            return Err(format!(
+                "WorkflowTransitionUpdated could not replace missing transition {}->{}:{}:{}",
+                removed_transition.source().as_ref(),
+                removed_transition.target().as_ref(),
+                removed_transition.kind().as_ref(),
+                removed_transition.trigger().as_ref()
+            ));
+        }
+        workflow.transitions.push(replacement_transition);
+        Ok(Some(model))
+    }
+
+    fn transition_record_from_removal(
+        removal: &WorkflowTransitionRemoval,
+    ) -> Result<WorkflowTransitionRecord, String> {
+        let workflow_exit = removal.target().workflow_slug().is_some();
+        Ok(WorkflowTransitionRecord::new(
+            workflow_transition_endpoint(removal.source().as_ref())?,
+            workflow_transition_endpoint(removal.target().as_ref())?,
+            workflow_transition_kind_from_connection(workflow_exit, removal.kind())?,
+            removal.trigger().clone(),
+        ))
+    }
+
+    fn transition_record_from_connection(
+        connection: &WorkflowConnection,
+    ) -> Result<WorkflowTransitionRecord, String> {
+        let workflow_exit = connection.target().workflow_slug().is_some();
+        Self::connection_transition_record(
+            workflow_transition_endpoint(connection.source().as_ref())?,
+            workflow_transition_endpoint(connection.target().as_ref())?,
+            workflow_transition_kind_from_connection(workflow_exit, connection.kind())?,
+            connection.trigger().clone(),
+            ConnectionTransitionMetadata {
+                payload_contract: connection.payload_contract().cloned(),
+                reason: connection.target().reason().cloned(),
+                source_control: connection.source_control().cloned(),
+                target_view: connection.target_view().cloned(),
+            },
+        )
     }
 
     fn apply_workflow_outcome_added(

@@ -17,7 +17,8 @@ use std::time::Duration;
 use fs4::{FileExt, TryLockError};
 
 use crate::core::connection::{
-    WorkflowConnection, WorkflowTransitionRemoval, connect_workflow, remove_transition,
+    WorkflowConnection, WorkflowTransitionRemoval, WorkflowTransitionUpdate, connect_workflow,
+    remove_transition, update_transition,
 };
 use crate::core::effect::{
     ArtifactDigest, ArtifactDigestRequirement, CanonicalDeclarationRequirement, CleanReviewEffect,
@@ -1645,6 +1646,7 @@ fn interpret_workflow_structure_effect(effect: &Effect) -> Option<Result<Vec<Str
         Effect::AddSliceFromWorkflow(slice) => interpret_add_slice(slice),
         Effect::AddWorkflowFromIndex(workflow) => interpret_add_workflow(workflow),
         Effect::ConnectWorkflowFromWorkflow(connection) => interpret_connect_workflow(connection),
+        Effect::UpdateTransitionFromWorkflow(update) => interpret_update_transition(update),
         Effect::RemoveSliceFromWorkflow(slug) => interpret_remove_slice(slug),
         Effect::RemoveTransitionFromWorkflow(removal) => interpret_remove_transition(removal),
         Effect::RemoveWorkflowFromIndex(slug) => interpret_remove_workflow(slug),
@@ -1709,6 +1711,25 @@ fn interpret_connect_workflow(connection: &WorkflowConnection) -> Result<Vec<Str
     interpret_effect(&Effect::ExportEvent(EventDraft::workflow_connected(
         connection,
     )))?;
+    Ok(reports)
+}
+
+fn interpret_update_transition(
+    update: &WorkflowTransitionUpdate,
+) -> Result<Vec<String>, ShellError> {
+    let (workflow_layout, workflow_graph) =
+        read_formal_workflow_layout_and_graph(update.workflow_slug())?;
+    let plan = update_transition(
+        workflow_layout.name(),
+        workflow_layout.description(),
+        &workflow_graph,
+        update,
+    )
+    .map_err(|error| ShellError::message(error.to_string()))?;
+    let reports = interpret_collect_reports(&plan)?;
+    interpret_effect(&Effect::ExportEvent(
+        EventDraft::workflow_transition_updated(update),
+    ))?;
     Ok(reports)
 }
 
