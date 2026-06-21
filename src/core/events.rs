@@ -146,6 +146,8 @@ pub(crate) enum ExportedEventType {
     WorkflowOwnedDefinitionUpdated,
     WorkflowOwnedDefinitionRemoved,
     WorkflowTransitionEvidenceAdded,
+    WorkflowTransitionEvidenceUpdated,
+    WorkflowTransitionEvidenceRemoved,
     WorkflowEntryLifecycleCoverageRequired,
     WorkflowEntryLifecycleStateAdded,
     WorkflowReadinessDeclared,
@@ -214,6 +216,8 @@ impl ExportedEventType {
             "WorkflowOwnedDefinitionUpdated" => Ok(Self::WorkflowOwnedDefinitionUpdated),
             "WorkflowOwnedDefinitionRemoved" => Ok(Self::WorkflowOwnedDefinitionRemoved),
             "WorkflowTransitionEvidenceAdded" => Ok(Self::WorkflowTransitionEvidenceAdded),
+            "WorkflowTransitionEvidenceUpdated" => Ok(Self::WorkflowTransitionEvidenceUpdated),
+            "WorkflowTransitionEvidenceRemoved" => Ok(Self::WorkflowTransitionEvidenceRemoved),
             "WorkflowEntryLifecycleCoverageRequired" => {
                 Ok(Self::WorkflowEntryLifecycleCoverageRequired)
             }
@@ -291,6 +295,8 @@ impl AsRef<str> for ExportedEventType {
             Self::WorkflowOwnedDefinitionUpdated => "WorkflowOwnedDefinitionUpdated",
             Self::WorkflowOwnedDefinitionRemoved => "WorkflowOwnedDefinitionRemoved",
             Self::WorkflowTransitionEvidenceAdded => "WorkflowTransitionEvidenceAdded",
+            Self::WorkflowTransitionEvidenceUpdated => "WorkflowTransitionEvidenceUpdated",
+            Self::WorkflowTransitionEvidenceRemoved => "WorkflowTransitionEvidenceRemoved",
             Self::WorkflowEntryLifecycleCoverageRequired => {
                 "WorkflowEntryLifecycleCoverageRequired"
             }
@@ -2582,22 +2588,37 @@ impl WorkflowTransitionEvidenceEventPayload {
     }
 
     fn from_json_value(payload: &Value) -> Result<Self, String> {
-        let source_control = optional_str(payload, "source_control")?
+        Ok(Self {
+            workflow: workflow_slug(required_str(payload, "workflow")?)?,
+            evidence: Self::evidence_from_json_value(payload, "")?,
+        })
+    }
+
+    fn evidence_from_json_value(
+        payload: &Value,
+        prefix: &str,
+    ) -> Result<WorkflowTransitionEvidenceRecord, String> {
+        let source_control = optional_str(payload, &format!("{prefix}source_control"))?
             .map(transition_trigger_name)
             .transpose()?;
-        let target_view = optional_str(payload, "target_view")?
+        let target_view = optional_str(payload, &format!("{prefix}target_view"))?
             .map(workflow_owned_definition_name)
             .transpose()?;
-        let source = workflow_transition_endpoint(required_str(payload, "from")?)?;
-        let target = workflow_transition_endpoint(required_str(payload, "to")?)?;
-        let kind = workflow_transition_kind(required_str(payload, "via")?)?;
-        let trigger = transition_trigger_name(required_str(payload, "name")?)?;
-        let source_evidence =
-            workflow_transition_source_evidence_text(required_str(payload, "source_evidence")?)?;
-        let target_evidence =
-            workflow_transition_target_evidence_text(required_str(payload, "target_evidence")?)?;
-        let evidence =
-            if let (Some(source_control), Some(target_view)) = (source_control, target_view) {
+        let source =
+            workflow_transition_endpoint(required_str(payload, &format!("{prefix}from"))?)?;
+        let target = workflow_transition_endpoint(required_str(payload, &format!("{prefix}to"))?)?;
+        let kind = workflow_transition_kind(required_str(payload, &format!("{prefix}via"))?)?;
+        let trigger = transition_trigger_name(required_str(payload, &format!("{prefix}name"))?)?;
+        let source_evidence = workflow_transition_source_evidence_text(required_str(
+            payload,
+            &format!("{prefix}source_evidence"),
+        )?)?;
+        let target_evidence = workflow_transition_target_evidence_text(required_str(
+            payload,
+            &format!("{prefix}target_evidence"),
+        )?)?;
+        if let (Some(source_control), Some(target_view)) = (source_control, target_view) {
+            Ok(
                 WorkflowTransitionEvidenceRecord::new_with_navigation_endpoints(
                     source,
                     target,
@@ -2606,21 +2627,18 @@ impl WorkflowTransitionEvidenceEventPayload {
                     WorkflowTransitionEvidenceNavigationEndpoints::new(source_control, target_view),
                     source_evidence,
                     target_evidence,
-                )
-            } else {
-                WorkflowTransitionEvidenceRecord::new(
-                    source,
-                    target,
-                    kind,
-                    trigger,
-                    source_evidence,
-                    target_evidence,
-                )
-            };
-        Ok(Self {
-            workflow: workflow_slug(required_str(payload, "workflow")?)?,
-            evidence,
-        })
+                ),
+            )
+        } else {
+            Ok(WorkflowTransitionEvidenceRecord::new(
+                source,
+                target,
+                kind,
+                trigger,
+                source_evidence,
+                target_evidence,
+            ))
+        }
     }
 
     fn into_parts(self) -> (WorkflowSlug, WorkflowTransitionEvidenceRecord) {
@@ -2652,6 +2670,85 @@ impl WorkflowTransitionEvidenceEventPayload {
             }
         }
         payload
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct WorkflowTransitionEvidenceUpdatedEventPayload {
+    workflow: WorkflowSlug,
+    previous: WorkflowTransitionEvidenceRecord,
+    evidence: WorkflowTransitionEvidenceRecord,
+}
+
+impl WorkflowTransitionEvidenceUpdatedEventPayload {
+    fn from_parts(
+        workflow: &WorkflowSlug,
+        previous: &WorkflowTransitionEvidenceRecord,
+        evidence: &WorkflowTransitionEvidenceRecord,
+    ) -> Self {
+        Self {
+            workflow: workflow.clone(),
+            previous: previous.clone(),
+            evidence: evidence.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            workflow: workflow_slug(required_str(payload, "workflow")?)?,
+            previous: WorkflowTransitionEvidenceEventPayload::evidence_from_json_value(
+                payload, "",
+            )?,
+            evidence: WorkflowTransitionEvidenceEventPayload::evidence_from_json_value(
+                payload, "new_",
+            )?,
+        })
+    }
+
+    fn into_parts(
+        self,
+    ) -> (
+        WorkflowSlug,
+        WorkflowTransitionEvidenceRecord,
+        WorkflowTransitionEvidenceRecord,
+    ) {
+        (self.workflow, self.previous, self.evidence)
+    }
+
+    fn to_json_value(&self) -> Value {
+        let mut value =
+            WorkflowTransitionEvidenceEventPayload::from_parts(&self.workflow, &self.previous)
+                .to_json_value();
+        let Value::Object(ref mut object) = value else {
+            return value;
+        };
+        object.insert(
+            "new_from".to_owned(),
+            json!(self.evidence.source().as_ref()),
+        );
+        object.insert("new_to".to_owned(), json!(self.evidence.target().as_ref()));
+        object.insert("new_via".to_owned(), json!(self.evidence.kind().as_ref()));
+        object.insert(
+            "new_name".to_owned(),
+            json!(self.evidence.trigger().as_ref()),
+        );
+        object.insert(
+            "new_source_control".to_owned(),
+            json!(self.evidence.source_control().map(AsRef::as_ref)),
+        );
+        object.insert(
+            "new_target_view".to_owned(),
+            json!(self.evidence.target_view().map(AsRef::as_ref)),
+        );
+        object.insert(
+            "new_source_evidence".to_owned(),
+            json!(self.evidence.source_evidence().as_ref()),
+        );
+        object.insert(
+            "new_target_evidence".to_owned(),
+            json!(self.evidence.target_evidence().as_ref()),
+        );
+        value
     }
 }
 
@@ -2813,6 +2910,15 @@ pub(crate) enum ExportedEventBody {
         definition: WorkflowOwnedDefinitionRecord,
     },
     WorkflowTransitionEvidenceAdded {
+        workflow: WorkflowSlug,
+        evidence: WorkflowTransitionEvidenceRecord,
+    },
+    WorkflowTransitionEvidenceUpdated {
+        workflow: WorkflowSlug,
+        previous: WorkflowTransitionEvidenceRecord,
+        evidence: WorkflowTransitionEvidenceRecord,
+    },
+    WorkflowTransitionEvidenceRemoved {
         workflow: WorkflowSlug,
         evidence: WorkflowTransitionEvidenceRecord,
     },
@@ -3010,6 +3116,8 @@ impl ExportedEventBody {
             | Self::WorkflowOwnedDefinitionUpdated { .. }
             | Self::WorkflowOwnedDefinitionRemoved { .. }
             | Self::WorkflowTransitionEvidenceAdded { .. }
+            | Self::WorkflowTransitionEvidenceUpdated { .. }
+            | Self::WorkflowTransitionEvidenceRemoved { .. }
             | Self::WorkflowEntryLifecycleCoverageRequired { .. }
             | Self::WorkflowEntryLifecycleStateAdded { .. }
             | Self::WorkflowReadinessDeclared { .. }
@@ -3023,68 +3131,36 @@ impl ExportedEventBody {
             Self::SliceScenarioUpdated { .. } => ExportedEventType::SliceScenarioUpdated,
             Self::SliceScenarioRemoved { .. } => ExportedEventType::SliceScenarioRemoved,
             Self::SliceOutcomeAdded { .. } => ExportedEventType::SliceOutcomeAdded,
-            Self::SliceOutcomeDefinitionUpdated { .. } => {
-                ExportedEventType::SliceOutcomeDefinitionUpdated
-            }
-            Self::SliceOutcomeDefinitionRemoved { .. } => {
-                ExportedEventType::SliceOutcomeDefinitionRemoved
-            }
+            Self::SliceOutcomeDefinitionUpdated { .. }
+            | Self::SliceOutcomeDefinitionRemoved { .. }
+            | Self::SliceExternalPayloadDefinitionUpdated { .. }
+            | Self::SliceExternalPayloadDefinitionRemoved { .. }
+            | Self::SliceEventDefinitionUpdated { .. }
+            | Self::SliceEventDefinitionRemoved { .. }
+            | Self::SliceCommandDefinitionUpdated { .. }
+            | Self::SliceCommandDefinitionRemoved { .. }
+            | Self::SliceReadModelDefinitionUpdated { .. }
+            | Self::SliceReadModelDefinitionRemoved { .. }
+            | Self::SliceViewDefinitionUpdated { .. }
+            | Self::SliceViewDefinitionRemoved { .. }
+            | Self::SliceViewControlUpdated { .. }
+            | Self::SliceViewControlRemoved { .. }
+            | Self::SliceTranslationDefinitionUpdated { .. }
+            | Self::SliceTranslationDefinitionRemoved { .. }
+            | Self::SliceAutomationDefinitionUpdated { .. }
+            | Self::SliceAutomationDefinitionRemoved { .. } => self.slice_definition_event_type(),
             Self::SliceExternalPayloadAdded { .. } => ExportedEventType::SliceExternalPayloadAdded,
-            Self::SliceExternalPayloadDefinitionUpdated { .. } => {
-                ExportedEventType::SliceExternalPayloadDefinitionUpdated
-            }
-            Self::SliceExternalPayloadDefinitionRemoved { .. } => {
-                ExportedEventType::SliceExternalPayloadDefinitionRemoved
-            }
             Self::SliceEventDefinitionAdded { .. } => ExportedEventType::SliceEventDefinitionAdded,
-            Self::SliceEventDefinitionUpdated { .. } => {
-                ExportedEventType::SliceEventDefinitionUpdated
-            }
-            Self::SliceEventDefinitionRemoved { .. } => {
-                ExportedEventType::SliceEventDefinitionRemoved
-            }
             Self::SliceCommandDefinitionAdded { .. } => {
                 ExportedEventType::SliceCommandDefinitionAdded
             }
-            Self::SliceCommandDefinitionUpdated { .. } => {
-                ExportedEventType::SliceCommandDefinitionUpdated
-            }
-            Self::SliceCommandDefinitionRemoved { .. } => {
-                ExportedEventType::SliceCommandDefinitionRemoved
-            }
             Self::SliceReadModelAdded { .. } => ExportedEventType::SliceReadModelAdded,
-            Self::SliceReadModelDefinitionUpdated { .. } => {
-                ExportedEventType::SliceReadModelDefinitionUpdated
-            }
-            Self::SliceReadModelDefinitionRemoved { .. } => {
-                ExportedEventType::SliceReadModelDefinitionRemoved
-            }
             Self::SliceViewAdded { .. } => ExportedEventType::SliceViewAdded,
-            Self::SliceViewDefinitionUpdated { .. } => {
-                ExportedEventType::SliceViewDefinitionUpdated
-            }
-            Self::SliceViewDefinitionRemoved { .. } => {
-                ExportedEventType::SliceViewDefinitionRemoved
-            }
-            Self::SliceViewControlUpdated { .. } => ExportedEventType::SliceViewControlUpdated,
-            Self::SliceViewControlRemoved { .. } => ExportedEventType::SliceViewControlRemoved,
             Self::SliceBitLevelDataFlowAdded { .. }
             | Self::SliceBitLevelDataFlowUpdated { .. }
             | Self::SliceBitLevelDataFlowRemoved { .. } => self.bit_level_data_flow_event_type(),
             Self::SliceTranslationAdded { .. } => ExportedEventType::SliceTranslationAdded,
-            Self::SliceTranslationDefinitionUpdated { .. } => {
-                ExportedEventType::SliceTranslationDefinitionUpdated
-            }
-            Self::SliceTranslationDefinitionRemoved { .. } => {
-                ExportedEventType::SliceTranslationDefinitionRemoved
-            }
             Self::SliceAutomationAdded { .. } => ExportedEventType::SliceAutomationAdded,
-            Self::SliceAutomationDefinitionUpdated { .. } => {
-                ExportedEventType::SliceAutomationDefinitionUpdated
-            }
-            Self::SliceAutomationDefinitionRemoved { .. } => {
-                ExportedEventType::SliceAutomationDefinitionRemoved
-            }
             Self::SliceBoardElementAdded { .. }
             | Self::SliceBoardElementUpdated { .. }
             | Self::SliceBoardElementRemoved { .. }
@@ -3093,6 +3169,62 @@ impl ExportedEventBody {
             | Self::SliceBoardConnectionRemoved { .. } => self.board_event_type(),
             Self::ReviewRecorded { .. } => ExportedEventType::ReviewRecorded,
             Self::ConflictResolved { .. } => ExportedEventType::ConflictResolved,
+        }
+    }
+
+    fn slice_definition_event_type(&self) -> ExportedEventType {
+        match self {
+            Self::SliceOutcomeDefinitionUpdated { .. } => {
+                ExportedEventType::SliceOutcomeDefinitionUpdated
+            }
+            Self::SliceOutcomeDefinitionRemoved { .. } => {
+                ExportedEventType::SliceOutcomeDefinitionRemoved
+            }
+            Self::SliceExternalPayloadDefinitionUpdated { .. } => {
+                ExportedEventType::SliceExternalPayloadDefinitionUpdated
+            }
+            Self::SliceExternalPayloadDefinitionRemoved { .. } => {
+                ExportedEventType::SliceExternalPayloadDefinitionRemoved
+            }
+            Self::SliceEventDefinitionUpdated { .. } => {
+                ExportedEventType::SliceEventDefinitionUpdated
+            }
+            Self::SliceEventDefinitionRemoved { .. } => {
+                ExportedEventType::SliceEventDefinitionRemoved
+            }
+            Self::SliceCommandDefinitionUpdated { .. } => {
+                ExportedEventType::SliceCommandDefinitionUpdated
+            }
+            Self::SliceCommandDefinitionRemoved { .. } => {
+                ExportedEventType::SliceCommandDefinitionRemoved
+            }
+            Self::SliceReadModelDefinitionUpdated { .. } => {
+                ExportedEventType::SliceReadModelDefinitionUpdated
+            }
+            Self::SliceReadModelDefinitionRemoved { .. } => {
+                ExportedEventType::SliceReadModelDefinitionRemoved
+            }
+            Self::SliceViewDefinitionUpdated { .. } => {
+                ExportedEventType::SliceViewDefinitionUpdated
+            }
+            Self::SliceViewDefinitionRemoved { .. } => {
+                ExportedEventType::SliceViewDefinitionRemoved
+            }
+            Self::SliceViewControlUpdated { .. } => ExportedEventType::SliceViewControlUpdated,
+            Self::SliceViewControlRemoved { .. } => ExportedEventType::SliceViewControlRemoved,
+            Self::SliceTranslationDefinitionUpdated { .. } => {
+                ExportedEventType::SliceTranslationDefinitionUpdated
+            }
+            Self::SliceTranslationDefinitionRemoved { .. } => {
+                ExportedEventType::SliceTranslationDefinitionRemoved
+            }
+            Self::SliceAutomationDefinitionUpdated { .. } => {
+                ExportedEventType::SliceAutomationDefinitionUpdated
+            }
+            Self::SliceAutomationDefinitionRemoved { .. } => {
+                ExportedEventType::SliceAutomationDefinitionRemoved
+            }
+            _ => self.event_type(),
         }
     }
 
@@ -3116,6 +3248,12 @@ impl ExportedEventBody {
             }
             Self::WorkflowTransitionEvidenceAdded { .. } => {
                 ExportedEventType::WorkflowTransitionEvidenceAdded
+            }
+            Self::WorkflowTransitionEvidenceUpdated { .. } => {
+                ExportedEventType::WorkflowTransitionEvidenceUpdated
+            }
+            Self::WorkflowTransitionEvidenceRemoved { .. } => {
+                ExportedEventType::WorkflowTransitionEvidenceRemoved
             }
             Self::WorkflowEntryLifecycleCoverageRequired { .. } => {
                 ExportedEventType::WorkflowEntryLifecycleCoverageRequired
@@ -3222,10 +3360,19 @@ impl ExportedEventBody {
                 workflow, previous, definition,
             )
             .to_json_value(),
-            Self::WorkflowTransitionEvidenceAdded { workflow, evidence } => {
+            Self::WorkflowTransitionEvidenceAdded { workflow, evidence }
+            | Self::WorkflowTransitionEvidenceRemoved { workflow, evidence } => {
                 WorkflowTransitionEvidenceEventPayload::from_parts(workflow, evidence)
                     .to_json_value()
             }
+            Self::WorkflowTransitionEvidenceUpdated {
+                workflow,
+                previous,
+                evidence,
+            } => WorkflowTransitionEvidenceUpdatedEventPayload::from_parts(
+                workflow, previous, evidence,
+            )
+            .to_json_value(),
             Self::WorkflowEntryLifecycleCoverageRequired { workflow } => {
                 json!({ "workflow": workflow.as_ref() })
             }
@@ -3495,6 +3642,8 @@ impl ExportedEventBody {
             | ExportedEventType::WorkflowOwnedDefinitionUpdated
             | ExportedEventType::WorkflowOwnedDefinitionRemoved
             | ExportedEventType::WorkflowTransitionEvidenceAdded
+            | ExportedEventType::WorkflowTransitionEvidenceUpdated
+            | ExportedEventType::WorkflowTransitionEvidenceRemoved
             | ExportedEventType::WorkflowEntryLifecycleCoverageRequired
             | ExportedEventType::WorkflowEntryLifecycleStateAdded => {
                 Self::workflow_fact_from_event_type_and_payload(event_type, payload)
@@ -3599,6 +3748,21 @@ impl ExportedEventBody {
                 let (workflow, evidence) =
                     WorkflowTransitionEvidenceEventPayload::from_json_value(payload)?.into_parts();
                 Ok(Self::WorkflowTransitionEvidenceAdded { workflow, evidence })
+            }
+            ExportedEventType::WorkflowTransitionEvidenceUpdated => {
+                let (workflow, previous, evidence) =
+                    WorkflowTransitionEvidenceUpdatedEventPayload::from_json_value(payload)?
+                        .into_parts();
+                Ok(Self::WorkflowTransitionEvidenceUpdated {
+                    workflow,
+                    previous,
+                    evidence,
+                })
+            }
+            ExportedEventType::WorkflowTransitionEvidenceRemoved => {
+                let (workflow, evidence) =
+                    WorkflowTransitionEvidenceEventPayload::from_json_value(payload)?.into_parts();
+                Ok(Self::WorkflowTransitionEvidenceRemoved { workflow, evidence })
             }
             ExportedEventType::WorkflowEntryLifecycleCoverageRequired => {
                 Ok(Self::WorkflowEntryLifecycleCoverageRequired {
@@ -4186,6 +4350,34 @@ impl EventDraft {
         Self {
             stream_id: EventStreamId::workflow(workflow),
             body: ExportedEventBody::WorkflowTransitionEvidenceAdded {
+                workflow: workflow.clone(),
+                evidence: evidence.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn workflow_transition_evidence_updated(
+        workflow: &WorkflowSlug,
+        previous: &WorkflowTransitionEvidenceRecord,
+        evidence: &WorkflowTransitionEvidenceRecord,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::workflow(workflow),
+            body: ExportedEventBody::WorkflowTransitionEvidenceUpdated {
+                workflow: workflow.clone(),
+                previous: previous.clone(),
+                evidence: evidence.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn workflow_transition_evidence_removed(
+        workflow: &WorkflowSlug,
+        evidence: &WorkflowTransitionEvidenceRecord,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::workflow(workflow),
+            body: ExportedEventBody::WorkflowTransitionEvidenceRemoved {
                 workflow: workflow.clone(),
                 evidence: evidence.clone(),
             },
@@ -5038,6 +5230,8 @@ impl ProjectedModel {
             | EmcEvent::WorkflowOwnedDefinitionUpdated { .. }
             | EmcEvent::WorkflowOwnedDefinitionRemoved { .. }
             | EmcEvent::WorkflowTransitionEvidenceAdded { .. }
+            | EmcEvent::WorkflowTransitionEvidenceUpdated { .. }
+            | EmcEvent::WorkflowTransitionEvidenceRemoved { .. }
             | EmcEvent::WorkflowEntryLifecycleCoverageRequired { .. }
             | EmcEvent::WorkflowEntryLifecycleStateAdded { .. } => {
                 Self::apply_workflow_event(model, event)
@@ -5151,8 +5345,10 @@ impl ProjectedModel {
             | EmcEvent::WorkflowOwnedDefinitionRemoved { .. } => {
                 Self::apply_workflow_owned_definition_event(model, event)
             }
-            EmcEvent::WorkflowTransitionEvidenceAdded { .. } => {
-                Self::apply_workflow_transition_evidence_added(model, event)
+            EmcEvent::WorkflowTransitionEvidenceAdded { .. }
+            | EmcEvent::WorkflowTransitionEvidenceUpdated { .. }
+            | EmcEvent::WorkflowTransitionEvidenceRemoved { .. } => {
+                Self::apply_workflow_transition_evidence_event(model, event)
             }
             EmcEvent::WorkflowEntryLifecycleCoverageRequired { workflow, .. } => {
                 Self::apply_workflow_entry_lifecycle_coverage_required(model, &workflow)
@@ -6325,6 +6521,64 @@ impl ProjectedModel {
             .workflow_mut(&workflow, "WorkflowTransitionEvidenceAdded")?
             .transition_evidences
             .push(evidence);
+        Ok(Some(model))
+    }
+
+    fn apply_workflow_transition_evidence_event(
+        model: Option<Self>,
+        event: EmcEvent,
+    ) -> Result<Option<Self>, String> {
+        match event {
+            EmcEvent::WorkflowTransitionEvidenceAdded { .. } => {
+                Self::apply_workflow_transition_evidence_added(model, event)
+            }
+            EmcEvent::WorkflowTransitionEvidenceUpdated { evidence, .. } => {
+                Self::apply_workflow_transition_evidence_updated(
+                    model,
+                    evidence.workflow(),
+                    evidence.previous(),
+                    evidence.replacement(),
+                )
+            }
+            EmcEvent::WorkflowTransitionEvidenceRemoved { evidence, .. } => {
+                Self::apply_workflow_transition_evidence_removed(
+                    model,
+                    evidence.workflow(),
+                    evidence.evidence(),
+                )
+            }
+            _ => Err(
+                "apply_workflow_transition_evidence_event received a non-transition-evidence event"
+                    .to_owned(),
+            ),
+        }
+    }
+
+    fn apply_workflow_transition_evidence_updated(
+        model: Option<Self>,
+        workflow: &WorkflowSlug,
+        previous: &WorkflowTransitionEvidenceRecord,
+        evidence: &WorkflowTransitionEvidenceRecord,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "WorkflowTransitionEvidenceUpdated")?;
+        let workflow = model.workflow_mut(workflow, "WorkflowTransitionEvidenceUpdated")?;
+        workflow
+            .transition_evidences
+            .retain(|existing| existing != previous);
+        workflow.transition_evidences.push(evidence.clone());
+        Ok(Some(model))
+    }
+
+    fn apply_workflow_transition_evidence_removed(
+        model: Option<Self>,
+        workflow: &WorkflowSlug,
+        evidence: &WorkflowTransitionEvidenceRecord,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "WorkflowTransitionEvidenceRemoved")?;
+        model
+            .workflow_mut(workflow, "WorkflowTransitionEvidenceRemoved")?
+            .transition_evidences
+            .retain(|existing| existing != evidence);
         Ok(Some(model))
     }
 

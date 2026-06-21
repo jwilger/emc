@@ -664,6 +664,65 @@ impl WorkflowTransitionEvidenceEffect {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowTransitionEvidenceUpdateEffect {
+    workflow_slug: WorkflowSlug,
+    previous: WorkflowTransitionEvidenceRecord,
+    replacement: WorkflowTransitionEvidenceRecord,
+}
+
+impl WorkflowTransitionEvidenceUpdateEffect {
+    pub(crate) fn new(
+        workflow_slug: WorkflowSlug,
+        previous: WorkflowTransitionEvidenceRecord,
+        replacement: WorkflowTransitionEvidenceRecord,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            previous,
+            replacement,
+        }
+    }
+
+    pub(crate) fn workflow_slug(&self) -> &WorkflowSlug {
+        &self.workflow_slug
+    }
+
+    pub(crate) fn previous(&self) -> &WorkflowTransitionEvidenceRecord {
+        &self.previous
+    }
+
+    pub(crate) fn replacement(&self) -> &WorkflowTransitionEvidenceRecord {
+        &self.replacement
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowTransitionEvidenceRemovalEffect {
+    workflow_slug: WorkflowSlug,
+    evidence: WorkflowTransitionEvidenceRecord,
+}
+
+impl WorkflowTransitionEvidenceRemovalEffect {
+    pub(crate) fn new(
+        workflow_slug: WorkflowSlug,
+        evidence: WorkflowTransitionEvidenceRecord,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            evidence,
+        }
+    }
+
+    pub(crate) fn workflow_slug(&self) -> &WorkflowSlug {
+        &self.workflow_slug
+    }
+
+    pub(crate) fn evidence(&self) -> &WorkflowTransitionEvidenceRecord {
+        &self.evidence
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct WorkflowEntryLifecycleStateEffect {
     workflow_slug: WorkflowSlug,
     coverage: WorkflowEntryLifecycleStateRecord,
@@ -1273,6 +1332,8 @@ pub(crate) enum Effect {
     UpdateWorkflowOutcomeFromWorkflow(WorkflowOutcomeUpdateEffect),
     RemoveWorkflowOutcomeFromWorkflow(WorkflowOutcomeRemovalEffect),
     AddWorkflowTransitionEvidenceFromWorkflow(WorkflowTransitionEvidenceEffect),
+    UpdateWorkflowTransitionEvidenceFromWorkflow(WorkflowTransitionEvidenceUpdateEffect),
+    RemoveWorkflowTransitionEvidenceFromWorkflow(WorkflowTransitionEvidenceRemovalEffect),
     AddWorkflowEntryLifecycleStateFromWorkflow(WorkflowEntryLifecycleStateEffect),
     CheckCurrentProject,
     ConnectWorkflowFromWorkflow(WorkflowConnection),

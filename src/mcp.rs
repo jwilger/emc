@@ -1855,6 +1855,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         update_workflow_outcome_tool(),
         update_workflow_command_error_tool(),
         update_workflow_owned_definition_tool(),
+        update_workflow_transition_evidence_tool(),
         update_slice_tool(),
         update_slice_kind_tool(),
         update_slice_name_tool(),
@@ -1889,6 +1890,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         remove_workflow_outcome_tool(),
         remove_workflow_command_error_tool(),
         remove_workflow_owned_definition_tool(),
+        remove_workflow_transition_evidence_tool(),
         connect_workflow_tool(),
         update_transition_tool(),
         remove_transition_tool(),
@@ -2148,6 +2150,136 @@ fn remove_workflow_owned_definition_tool() -> Tool {
         "Remove a workflow composition ownership fact from Lean4 and Quint workflow artifacts.",
         workflow_owned_definition_schema(),
     )
+}
+
+fn update_workflow_transition_evidence_tool() -> Tool {
+    Tool::new(
+        "update_workflow_transition_evidence",
+        "Update workflow transition legality evidence in Lean4 and Quint workflow artifacts.",
+        workflow_transition_evidence_update_schema(),
+    )
+}
+
+fn remove_workflow_transition_evidence_tool() -> Tool {
+    Tool::new(
+        "remove_workflow_transition_evidence",
+        "Remove workflow transition legality evidence from Lean4 and Quint workflow artifacts.",
+        workflow_transition_evidence_schema(),
+    )
+}
+
+fn workflow_transition_evidence_schema() -> JsonObject {
+    schema_object(json!({
+            "type": "object",
+            "properties": {
+                "workflow": {
+                    "type": "string"
+                },
+                "from": {
+                    "type": "string"
+                },
+                "to": {
+                    "type": "string"
+                },
+                "via": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "source_control": {
+                    "type": "string",
+                    "description": "Required when via is navigation; source-slice-owned control that initiates navigation."
+                },
+                "target_view": {
+                    "type": "string",
+                    "description": "Required when via is navigation; target-slice-owned entry view reached by navigation."
+                },
+                "source_evidence": {
+                    "type": "string"
+                },
+                "target_evidence": {
+                    "type": "string"
+                }
+            },
+            "required": ["workflow", "from", "to", "via", "name", "source_evidence", "target_evidence"],
+            "additionalProperties": false
+    }))
+}
+
+fn workflow_transition_evidence_update_schema() -> JsonObject {
+    schema_object(json!({
+            "type": "object",
+            "properties": {
+                "workflow": {
+                    "type": "string"
+                },
+                "from": {
+                    "type": "string"
+                },
+                "to": {
+                    "type": "string"
+                },
+                "via": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "source_control": {
+                    "type": "string"
+                },
+                "target_view": {
+                    "type": "string"
+                },
+                "source_evidence": {
+                    "type": "string"
+                },
+                "target_evidence": {
+                    "type": "string"
+                },
+                "new_from": {
+                    "type": "string"
+                },
+                "new_to": {
+                    "type": "string"
+                },
+                "new_via": {
+                    "type": "string"
+                },
+                "new_name": {
+                    "type": "string"
+                },
+                "new_source_control": {
+                    "type": "string"
+                },
+                "new_target_view": {
+                    "type": "string"
+                },
+                "new_source_evidence": {
+                    "type": "string"
+                },
+                "new_target_evidence": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "workflow",
+                "from",
+                "to",
+                "via",
+                "name",
+                "source_evidence",
+                "target_evidence",
+                "new_from",
+                "new_to",
+                "new_via",
+                "new_name",
+                "new_source_evidence",
+                "new_target_evidence"
+            ],
+            "additionalProperties": false
+    }))
 }
 
 fn workflow_owned_definition_update_schema() -> JsonObject {
@@ -2553,6 +2685,9 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "update_workflow_owned_definition" => {
             Some(update_workflow_owned_definition_tool_text(request))
         }
+        "update_workflow_transition_evidence" => {
+            Some(update_workflow_transition_evidence_tool_text(request))
+        }
         "update_slice" => Some(update_slice_tool_text(request)),
         "update_slice_kind" => Some(update_slice_kind_tool_text(request)),
         "update_slice_name" => Some(update_slice_name_tool_text(request)),
@@ -2592,6 +2727,9 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "remove_workflow_command_error" => Some(remove_workflow_command_error_tool_text(request)),
         "remove_workflow_owned_definition" => {
             Some(remove_workflow_owned_definition_tool_text(request))
+        }
+        "remove_workflow_transition_evidence" => {
+            Some(remove_workflow_transition_evidence_tool_text(request))
         }
         "connect_workflow" => Some(connect_workflow_tool_text(request)),
         "update_transition" => Some(update_transition_tool_text(request)),
@@ -3176,78 +3314,75 @@ fn build_workflow_owned_definition(
 }
 
 fn add_workflow_transition_evidence_tool_text(request: &Value) -> Result<String, ShellError> {
-    let arguments = request
-        .get("params")
-        .and_then(|params| params.get("arguments"))
-        .ok_or_else(|| {
-            ShellError::message("add_workflow_transition_evidence requires arguments")
-        })?;
-    let workflow_slug = arguments
-        .get("workflow")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_workflow_transition_evidence requires workflow"))
-        .and_then(|raw_workflow| {
-            parse_workflow_slug(raw_workflow)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let source = arguments
-        .get("from")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_workflow_transition_evidence requires from"))
-        .and_then(|raw_source| {
-            parse_workflow_transition_endpoint(raw_source)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let target = arguments
-        .get("to")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_workflow_transition_evidence requires to"))
-        .and_then(|raw_target| {
-            parse_workflow_transition_endpoint(raw_target)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let kind = arguments
-        .get("via")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_workflow_transition_evidence requires via"))
-        .and_then(|raw_kind| {
-            parse_workflow_transition_kind(raw_kind)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let trigger = arguments
-        .get("name")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_workflow_transition_evidence requires name"))
-        .and_then(|raw_trigger| {
-            parse_transition_trigger_name(raw_trigger)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let source_control = parse_optional_transition_source_control(arguments)?;
-    let target_view = parse_optional_transition_target_view(arguments)?;
-    let source_evidence = arguments
-        .get("source_evidence")
-        .and_then(Value::as_str)
-        .ok_or_else(|| {
-            ShellError::message("add_workflow_transition_evidence requires source_evidence")
-        })
-        .and_then(|raw_source_evidence| {
-            parse_workflow_transition_source_evidence_text(raw_source_evidence)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let target_evidence = arguments
-        .get("target_evidence")
-        .and_then(Value::as_str)
-        .ok_or_else(|| {
-            ShellError::message("add_workflow_transition_evidence requires target_evidence")
-        })
-        .and_then(|raw_target_evidence| {
-            parse_workflow_transition_target_evidence_text(raw_target_evidence)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
+    let arguments = required_tool_arguments(request, "add_workflow_transition_evidence")?;
+    let workflow_slug =
+        workflow_slug_from_arguments(arguments, "add_workflow_transition_evidence")?;
+    let evidence = workflow_transition_evidence_from_arguments(
+        arguments,
+        "add_workflow_transition_evidence",
+        "",
+    )?;
 
+    interpret_collect_reports(&command::add_workflow_transition_evidence(
+        workflow_slug,
+        evidence,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn update_workflow_transition_evidence_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = required_tool_arguments(request, "update_workflow_transition_evidence")?;
+    let workflow_slug =
+        workflow_slug_from_arguments(arguments, "update_workflow_transition_evidence")?;
+
+    interpret_collect_reports(&command::update_workflow_transition_evidence(
+        workflow_slug,
+        workflow_transition_evidence_from_arguments(
+            arguments,
+            "update_workflow_transition_evidence",
+            "",
+        )?,
+        workflow_transition_evidence_from_arguments(
+            arguments,
+            "update_workflow_transition_evidence",
+            "new_",
+        )?,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn remove_workflow_transition_evidence_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = required_tool_arguments(request, "remove_workflow_transition_evidence")?;
+    let workflow_slug =
+        workflow_slug_from_arguments(arguments, "remove_workflow_transition_evidence")?;
+
+    interpret_collect_reports(&command::remove_workflow_transition_evidence(
+        workflow_slug,
+        workflow_transition_evidence_from_arguments(
+            arguments,
+            "remove_workflow_transition_evidence",
+            "",
+        )?,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn workflow_transition_evidence_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+    prefix: &str,
+) -> Result<WorkflowTransitionEvidenceRecord, ShellError> {
+    let source = workflow_transition_endpoint_from_arguments(arguments, tool_name, prefix, "from")?;
+    let target = workflow_transition_endpoint_from_arguments(arguments, tool_name, prefix, "to")?;
+    let kind = workflow_transition_kind_from_arguments(arguments, tool_name, prefix)?;
+    let trigger = transition_trigger_from_arguments(arguments, tool_name, prefix, "name")?;
+    let source_control = parse_optional_transition_source_control(arguments, prefix)?;
+    let target_view = parse_optional_transition_target_view(arguments, prefix)?;
+    let source_evidence = transition_source_evidence_from_arguments(arguments, tool_name, prefix)?;
+    let target_evidence = transition_target_evidence_from_arguments(arguments, tool_name, prefix)?;
     let navigation_endpoints =
         resolve_transition_navigation_endpoints(kind, source_control, target_view)?;
-    let evidence = build_workflow_transition_evidence(
+    Ok(build_workflow_transition_evidence(
         source,
         target,
         kind,
@@ -3255,13 +3390,76 @@ fn add_workflow_transition_evidence_tool_text(request: &Value) -> Result<String,
         navigation_endpoints,
         source_evidence,
         target_evidence,
-    );
-
-    interpret_collect_reports(&command::add_workflow_transition_evidence(
-        workflow_slug,
-        evidence,
     ))
-    .map(|reports| reports.join("\n"))
+}
+
+fn workflow_transition_endpoint_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+    prefix: &str,
+    name: &str,
+) -> Result<WorkflowTransitionEndpoint, ShellError> {
+    let field = format!("{prefix}{name}");
+    let raw = arguments
+        .get(&field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {field}")))?;
+    parse_workflow_transition_endpoint(raw).map_err(|error| ShellError::message(error.to_string()))
+}
+
+fn workflow_transition_kind_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+    prefix: &str,
+) -> Result<WorkflowTransitionKind, ShellError> {
+    let field = format!("{prefix}via");
+    let raw = arguments
+        .get(&field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {field}")))?;
+    parse_workflow_transition_kind(raw).map_err(|error| ShellError::message(error.to_string()))
+}
+
+fn transition_trigger_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+    prefix: &str,
+    name: &str,
+) -> Result<TransitionTriggerName, ShellError> {
+    let field = format!("{prefix}{name}");
+    let raw = arguments
+        .get(&field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {field}")))?;
+    parse_transition_trigger_name(raw).map_err(|error| ShellError::message(error.to_string()))
+}
+
+fn transition_source_evidence_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+    prefix: &str,
+) -> Result<WorkflowTransitionSourceEvidenceText, ShellError> {
+    let field = format!("{prefix}source_evidence");
+    let raw = arguments
+        .get(&field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {field}")))?;
+    parse_workflow_transition_source_evidence_text(raw)
+        .map_err(|error| ShellError::message(error.to_string()))
+}
+
+fn transition_target_evidence_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+    prefix: &str,
+) -> Result<WorkflowTransitionTargetEvidenceText, ShellError> {
+    let field = format!("{prefix}target_evidence");
+    let raw = arguments
+        .get(&field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {field}")))?;
+    parse_workflow_transition_target_evidence_text(raw)
+        .map_err(|error| ShellError::message(error.to_string()))
 }
 
 fn resolve_transition_navigation_endpoints(
@@ -3289,9 +3487,11 @@ fn resolve_transition_navigation_endpoints(
 
 fn parse_optional_transition_source_control(
     arguments: &Value,
+    prefix: &str,
 ) -> Result<Option<TransitionTriggerName>, ShellError> {
+    let field = format!("{prefix}source_control");
     arguments
-        .get("source_control")
+        .get(&field)
         .and_then(Value::as_str)
         .map(|raw_source_control| {
             parse_transition_trigger_name(raw_source_control)
@@ -3302,9 +3502,11 @@ fn parse_optional_transition_source_control(
 
 fn parse_optional_transition_target_view(
     arguments: &Value,
+    prefix: &str,
 ) -> Result<Option<WorkflowOwnedDefinitionName>, ShellError> {
+    let field = format!("{prefix}target_view");
     arguments
-        .get("target_view")
+        .get(&field)
         .and_then(Value::as_str)
         .map(|raw_target_view| {
             parse_workflow_owned_definition_name(raw_target_view)

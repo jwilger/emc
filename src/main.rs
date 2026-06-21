@@ -254,6 +254,15 @@ enum Command {
         workflow_slug: WorkflowSlug,
         evidence: WorkflowTransitionEvidenceRecord,
     },
+    UpdateWorkflowTransitionEvidence {
+        workflow_slug: WorkflowSlug,
+        previous: WorkflowTransitionEvidenceRecord,
+        replacement: WorkflowTransitionEvidenceRecord,
+    },
+    RemoveWorkflowTransitionEvidence {
+        workflow_slug: WorkflowSlug,
+        evidence: WorkflowTransitionEvidenceRecord,
+    },
     AddWorkflowEntryLifecycleState {
         workflow_slug: WorkflowSlug,
         coverage: WorkflowEntryLifecycleStateRecord,
@@ -493,6 +502,22 @@ fn run_workflow_commands(command: Command) -> Result<(), ShellError> {
             workflow_slug,
             evidence,
         } => interpret(&command::add_workflow_transition_evidence(
+            workflow_slug,
+            evidence,
+        )),
+        Command::UpdateWorkflowTransitionEvidence {
+            workflow_slug,
+            previous,
+            replacement,
+        } => interpret(&command::update_workflow_transition_evidence(
+            workflow_slug,
+            previous,
+            replacement,
+        )),
+        Command::RemoveWorkflowTransitionEvidence {
+            workflow_slug,
+            evidence,
+        } => interpret(&command::remove_workflow_transition_evidence(
             workflow_slug,
             evidence,
         )),
@@ -1450,6 +1475,9 @@ fn parse_cli_2(arguments: &[String]) -> Result<Cli, ShellError> {
     if let Some(cli) = parse_workflow_owned_definition_mutation_cli(arguments)? {
         return Ok(cli);
     }
+    if let Some(cli) = parse_workflow_transition_evidence_mutation_cli(arguments)? {
+        return Ok(cli);
+    }
 
     match arguments {
         [
@@ -1542,6 +1570,103 @@ fn parse_workflow_owned_definition_mutation_cli(
             }))
         }
         _ => Ok(None),
+    }
+}
+
+fn parse_workflow_transition_evidence_mutation_cli(
+    arguments: &[String],
+) -> Result<Option<Cli>, ShellError> {
+    let [command, subject, ..] = arguments else {
+        return Ok(None);
+    };
+    if subject != "workflow-transition-evidence" {
+        return Ok(None);
+    }
+    match command.as_str() {
+        "update" => {
+            let workflow_slug = parse_required_workflow_slug_flag(arguments)?;
+            Ok(Some(Cli {
+                command: Command::UpdateWorkflowTransitionEvidence {
+                    workflow_slug,
+                    previous: parse_workflow_transition_evidence_flags(arguments, "")?,
+                    replacement: parse_workflow_transition_evidence_flags(arguments, "new-")?,
+                },
+            }))
+        }
+        "remove" => {
+            let workflow_slug = parse_required_workflow_slug_flag(arguments)?;
+            Ok(Some(Cli {
+                command: Command::RemoveWorkflowTransitionEvidence {
+                    workflow_slug,
+                    evidence: parse_workflow_transition_evidence_flags(arguments, "")?,
+                },
+            }))
+        }
+        _ => Ok(None),
+    }
+}
+
+fn parse_workflow_transition_evidence_flags(
+    arguments: &[String],
+    prefix: &str,
+) -> Result<WorkflowTransitionEvidenceRecord, ShellError> {
+    let source = required_cli_flag(arguments, &format!("--{prefix}from")).and_then(|source| {
+        parse_workflow_transition_endpoint(source)
+            .map_err(|error| ShellError::message(error.to_string()))
+    })?;
+    let target = required_cli_flag(arguments, &format!("--{prefix}to")).and_then(|target| {
+        parse_workflow_transition_endpoint(target)
+            .map_err(|error| ShellError::message(error.to_string()))
+    })?;
+    let kind = required_cli_flag(arguments, &format!("--{prefix}via")).and_then(|kind| {
+        parse_workflow_transition_kind(kind).map_err(|error| ShellError::message(error.to_string()))
+    })?;
+    let trigger = required_cli_flag(arguments, &format!("--{prefix}name")).and_then(|trigger| {
+        parse_transition_trigger_name(trigger)
+            .map_err(|error| ShellError::message(error.to_string()))
+    })?;
+    let source_control = optional_cli_flag(arguments, &format!("--{prefix}source-control"))
+        .map(parse_transition_trigger_name)
+        .transpose()
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let target_view = optional_cli_flag(arguments, &format!("--{prefix}target-view"))
+        .map(parse_workflow_owned_definition_name)
+        .transpose()
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let source_evidence = required_cli_flag(arguments, &format!("--{prefix}source-evidence"))
+        .and_then(|source_evidence| {
+            parse_workflow_transition_source_evidence_text(source_evidence)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let target_evidence = required_cli_flag(arguments, &format!("--{prefix}target-evidence"))
+        .and_then(|target_evidence| {
+            parse_workflow_transition_target_evidence_text(target_evidence)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+
+    if kind == WorkflowTransitionKind::Navigation
+        && let (Some(source_control), Some(target_view)) = (source_control, target_view)
+    {
+        Ok(
+            WorkflowTransitionEvidenceRecord::new_with_navigation_endpoints(
+                source,
+                target,
+                kind,
+                trigger,
+                WorkflowTransitionEvidenceNavigationEndpoints::new(source_control, target_view),
+                source_evidence,
+                target_evidence,
+            ),
+        )
+    } else {
+        Ok(WorkflowTransitionEvidenceRecord::new(
+            source,
+            target,
+            kind,
+            trigger,
+            source_evidence,
+            target_evidence,
+        ))
     }
 }
 

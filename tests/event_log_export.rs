@@ -1257,6 +1257,137 @@ mod tests {
     }
 
     #[test]
+    fn check_rebuilds_updated_workflow_transition_evidence_from_exported_events()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        create_project_with_workflow_and_review_slice(&temp_dir)?;
+        add_workflow_transition_evidence(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "workflow-transition-evidence",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
+                "review-ticket-screen",
+                "--source-evidence",
+                "capture-ticket view owns the review-ticket-screen navigation control",
+                "--target-evidence",
+                "review-ticket workflow step exposes review-ticket-screen as its entry view",
+                "--new-from",
+                "capture-ticket",
+                "--new-to",
+                "review-ticket",
+                "--new-via",
+                "navigation",
+                "--new-name",
+                "review-ticket-screen",
+                "--new-source-control",
+                "review-ticket-screen",
+                "--new-target-view",
+                "review-ticket-screen",
+                "--new-source-evidence",
+                "capture-ticket control is the modeled navigation source",
+                "--new-target-evidence",
+                "review-ticket entry view is the modeled navigation target",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        fs::remove_file(temp_dir.path().join("emc.toml"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/lean"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let workflow_lean = fs::read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        assert!(
+            workflow_lean.contains(
+                "def workflowTransitionEvidences : List WorkflowTransitionEvidence := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", sourceControl := \"review-ticket-screen\", targetView := \"review-ticket-screen\", sourceEvidence := \"capture-ticket control is the modeled navigation source\", targetEvidence := \"review-ticket entry view is the modeled navigation target\" }]"
+            ),
+            "updated workflow transition evidence must be rebuilt from exported events"
+        );
+        assert!(
+            !workflow_lean
+                .contains("capture-ticket view owns the review-ticket-screen navigation control"),
+            "previous workflow transition evidence must not be rebuilt from exported events"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_rebuilds_removed_workflow_transition_evidence_from_exported_events()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        create_project_with_workflow_and_review_slice(&temp_dir)?;
+        add_workflow_transition_evidence(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "workflow-transition-evidence",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
+                "review-ticket-screen",
+                "--source-evidence",
+                "capture-ticket view owns the review-ticket-screen navigation control",
+                "--target-evidence",
+                "review-ticket workflow step exposes review-ticket-screen as its entry view",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        fs::remove_file(temp_dir.path().join("emc.toml"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/lean"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let workflow_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        assert!(
+            workflow_quint
+                .contains("val workflowTransitionEvidences: List[WorkflowTransitionEvidence] = []"),
+            "removed workflow transition evidence must not be rebuilt from exported events"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn check_rebuilds_workflow_entry_lifecycle_from_exported_events() -> Result<(), Box<dyn Error>>
     {
         let temp_dir = TempDir::new()?;
@@ -2372,6 +2503,61 @@ mod tests {
             .assert()
             .success();
 
+        Ok(())
+    }
+
+    fn create_project_with_workflow_and_review_slice(
+        temp_dir: &TempDir,
+    ) -> Result<(), Box<dyn Error>> {
+        create_project_with_workflow_and_slice(temp_dir)?;
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "review-ticket",
+                "--name",
+                "Review ticket",
+                "--type",
+                "state_view",
+                "--description",
+                "Actor reviews repair ticket details.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+        Ok(())
+    }
+
+    fn add_workflow_transition_evidence(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-transition-evidence",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
+                "review-ticket-screen",
+                "--source-evidence",
+                "capture-ticket view owns the review-ticket-screen navigation control",
+                "--target-evidence",
+                "review-ticket workflow step exposes review-ticket-screen as its entry view",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
         Ok(())
     }
 
