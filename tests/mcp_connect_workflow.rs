@@ -833,6 +833,71 @@ mod tests {
     }
 
     #[test]
+    fn mcp_stdio_updates_workflow_owned_definition_facts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_open_ticket_workflow(temp_dir.path())?;
+        add_workflow_owned_definition(
+            temp_dir.path(),
+            "open-ticket",
+            "capture-ticket",
+            "command",
+            "CaptureTicket",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(update_workflow_owned_definition_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "\"update_workflow_owned_definition\"",
+            ))
+            .stdout(predicate::str::contains(
+                "updated workflow owned definition command CaptureTicket on workflow open-ticket",
+            ));
+
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        assert!(quint.contains(
+            "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: OwnedCommand, definitionName: \"SubmitTicket\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\", viewRole: \"\" }]"
+        ));
+        assert!(!quint.contains("definitionName: \"CaptureTicket\""));
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_stdio_removes_workflow_owned_definition_facts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_open_ticket_workflow(temp_dir.path())?;
+        add_workflow_owned_definition(
+            temp_dir.path(),
+            "open-ticket",
+            "capture-ticket",
+            "command",
+            "CaptureTicket",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(remove_workflow_owned_definition_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "\"remove_workflow_owned_definition\"",
+            ))
+            .stdout(predicate::str::contains(
+                "removed workflow owned definition command CaptureTicket from workflow open-ticket",
+            ));
+
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        assert!(quint.contains("val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = []"));
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_stdio_rejects_event_participation_without_event_identity() -> Result<(), Box<dyn Error>>
     {
         let temp_dir = TempDir::new()?;
@@ -1144,6 +1209,33 @@ mod tests {
         Ok(())
     }
 
+    fn add_workflow_owned_definition(
+        cwd: &Path,
+        workflow: &str,
+        source_slice: &str,
+        definition_kind: &str,
+        definition_name: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-owned-definition",
+                "--workflow",
+                workflow,
+                "--source-slice",
+                source_slice,
+                "--definition-kind",
+                definition_kind,
+                "--definition-name",
+                definition_name,
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
     fn transition_tool_schema<'tools>(
         tools: &'tools [Value],
         name: &str,
@@ -1286,6 +1378,22 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_owned_definition\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"command\",\"definition_name\":\"CaptureTicket\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_owned_definition\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"event\",\"definition_name\":\"TicketSubmitted\",\"definition_stream\":\"tickets\",\"source_provenance\":\"CaptureTicket command input\",\"event_participation\":\"emitted\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_owned_definition\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"view\",\"definition_name\":\"ticket-entry-screen\",\"view_role\":\"entry\"}}}\n",
+        )
+    }
+
+    fn update_workflow_owned_definition_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_workflow_owned_definition\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"command\",\"definition_name\":\"CaptureTicket\",\"new_source_slice\":\"capture-ticket\",\"new_definition_kind\":\"command\",\"new_definition_name\":\"SubmitTicket\"}}}\n",
+        )
+    }
+
+    fn remove_workflow_owned_definition_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_workflow_owned_definition\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"command\",\"definition_name\":\"CaptureTicket\"}}}\n",
         )
     }
 

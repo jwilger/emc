@@ -648,38 +648,42 @@ fn add_workflow_owned_definition_tool() -> Tool {
     Tool::new(
         "add_workflow_owned_definition",
         "Add a workflow composition ownership fact directly to Lean4 and Quint workflow artifacts.",
-        schema_object(json!({
-                "type": "object",
-                "properties": {
-                    "workflow": {
-                        "type": "string"
-                    },
-                    "source_slice": {
-                        "type": "string"
-                    },
-                    "definition_kind": {
-                        "type": "string"
-                    },
-                    "definition_name": {
-                        "type": "string"
-                    },
-                    "definition_stream": {
-                        "type": "string"
-                    },
-                    "source_provenance": {
-                        "type": "string"
-                    },
-                    "event_participation": {
-                        "type": "string"
-                    },
-                    "view_role": {
-                        "type": "string"
-                    }
-                },
-                "required": ["workflow", "source_slice", "definition_kind", "definition_name"],
-                "additionalProperties": false
-        })),
+        workflow_owned_definition_schema(),
     )
+}
+
+fn workflow_owned_definition_schema() -> JsonObject {
+    schema_object(json!({
+            "type": "object",
+            "properties": {
+                "workflow": {
+                    "type": "string"
+                },
+                "source_slice": {
+                    "type": "string"
+                },
+                "definition_kind": {
+                    "type": "string"
+                },
+                "definition_name": {
+                    "type": "string"
+                },
+                "definition_stream": {
+                    "type": "string"
+                },
+                "source_provenance": {
+                    "type": "string"
+                },
+                "event_participation": {
+                    "type": "string"
+                },
+                "view_role": {
+                    "type": "string"
+                }
+            },
+            "required": ["workflow", "source_slice", "definition_kind", "definition_name"],
+            "additionalProperties": false
+    }))
 }
 
 fn add_workflow_transition_evidence_tool() -> Tool {
@@ -1850,6 +1854,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         update_workflow_name_tool(),
         update_workflow_outcome_tool(),
         update_workflow_command_error_tool(),
+        update_workflow_owned_definition_tool(),
         update_slice_tool(),
         update_slice_kind_tool(),
         update_slice_name_tool(),
@@ -1883,6 +1888,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         remove_workflow_tool(),
         remove_workflow_outcome_tool(),
         remove_workflow_command_error_tool(),
+        remove_workflow_owned_definition_tool(),
         connect_workflow_tool(),
         update_transition_tool(),
         remove_transition_tool(),
@@ -2126,6 +2132,85 @@ fn remove_workflow_command_error_tool() -> Tool {
         "Remove a workflow composition command-local error fact from Lean4 and Quint workflow artifacts.",
         workflow_command_error_schema(),
     )
+}
+
+fn update_workflow_owned_definition_tool() -> Tool {
+    Tool::new(
+        "update_workflow_owned_definition",
+        "Update a workflow composition ownership fact in Lean4 and Quint workflow artifacts.",
+        workflow_owned_definition_update_schema(),
+    )
+}
+
+fn remove_workflow_owned_definition_tool() -> Tool {
+    Tool::new(
+        "remove_workflow_owned_definition",
+        "Remove a workflow composition ownership fact from Lean4 and Quint workflow artifacts.",
+        workflow_owned_definition_schema(),
+    )
+}
+
+fn workflow_owned_definition_update_schema() -> JsonObject {
+    schema_object(json!({
+            "type": "object",
+            "properties": {
+                "workflow": {
+                    "type": "string"
+                },
+                "source_slice": {
+                    "type": "string"
+                },
+                "definition_kind": {
+                    "type": "string"
+                },
+                "definition_name": {
+                    "type": "string"
+                },
+                "definition_stream": {
+                    "type": "string"
+                },
+                "source_provenance": {
+                    "type": "string"
+                },
+                "event_participation": {
+                    "type": "string"
+                },
+                "view_role": {
+                    "type": "string"
+                },
+                "new_source_slice": {
+                    "type": "string"
+                },
+                "new_definition_kind": {
+                    "type": "string"
+                },
+                "new_definition_name": {
+                    "type": "string"
+                },
+                "new_definition_stream": {
+                    "type": "string"
+                },
+                "new_source_provenance": {
+                    "type": "string"
+                },
+                "new_event_participation": {
+                    "type": "string"
+                },
+                "new_view_role": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "workflow",
+                "source_slice",
+                "definition_kind",
+                "definition_name",
+                "new_source_slice",
+                "new_definition_kind",
+                "new_definition_name"
+            ],
+            "additionalProperties": false
+    }))
 }
 
 fn workflow_command_error_schema() -> JsonObject {
@@ -2465,6 +2550,9 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "update_workflow_name" => Some(update_workflow_name_tool_text(request)),
         "update_workflow_outcome" => Some(update_workflow_outcome_tool_text(request)),
         "update_workflow_command_error" => Some(update_workflow_command_error_tool_text(request)),
+        "update_workflow_owned_definition" => {
+            Some(update_workflow_owned_definition_tool_text(request))
+        }
         "update_slice" => Some(update_slice_tool_text(request)),
         "update_slice_kind" => Some(update_slice_kind_tool_text(request)),
         "update_slice_name" => Some(update_slice_name_tool_text(request)),
@@ -2502,6 +2590,9 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "remove_workflow" => Some(remove_workflow_tool_text(request)),
         "remove_workflow_outcome" => Some(remove_workflow_outcome_tool_text(request)),
         "remove_workflow_command_error" => Some(remove_workflow_command_error_tool_text(request)),
+        "remove_workflow_owned_definition" => {
+            Some(remove_workflow_owned_definition_tool_text(request))
+        }
         "connect_workflow" => Some(connect_workflow_tool_text(request)),
         "update_transition" => Some(update_transition_tool_text(request)),
         "remove_transition" => Some(remove_transition_tool_text(request)),
@@ -2869,59 +2960,10 @@ fn workflow_command_error_from_arguments(
 }
 
 fn add_workflow_owned_definition_tool_text(request: &Value) -> Result<String, ShellError> {
-    let arguments = request
-        .get("params")
-        .and_then(|params| params.get("arguments"))
-        .ok_or_else(|| ShellError::message("add_workflow_owned_definition requires arguments"))?;
-    let workflow_slug = arguments
-        .get("workflow")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_workflow_owned_definition requires workflow"))
-        .and_then(|raw_workflow| {
-            parse_workflow_slug(raw_workflow)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let source_slice = arguments
-        .get("source_slice")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_workflow_owned_definition requires source_slice"))
-        .and_then(|raw_source_slice| {
-            WorkflowTransitionEndpoint::try_new(raw_source_slice.to_owned())
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let definition_kind = arguments
-        .get("definition_kind")
-        .and_then(Value::as_str)
-        .ok_or_else(|| {
-            ShellError::message("add_workflow_owned_definition requires definition_kind")
-        })
-        .and_then(|raw_definition_kind| {
-            parse_workflow_owned_definition_kind(raw_definition_kind)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let definition_name = arguments
-        .get("definition_name")
-        .and_then(Value::as_str)
-        .ok_or_else(|| {
-            ShellError::message("add_workflow_owned_definition requires definition_name")
-        })
-        .and_then(|raw_definition_name| {
-            parse_workflow_owned_definition_name(raw_definition_name)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let definition_stream = parse_optional_owned_definition_stream(arguments)?;
-    let source_provenance = parse_optional_owned_definition_provenance(arguments)?;
-    let event_participation = parse_optional_owned_definition_event_participation(arguments)?;
-    let view_role = parse_optional_owned_definition_view_role(arguments)?;
-    let definition = build_workflow_owned_definition(
-        source_slice,
-        definition_kind,
-        definition_name,
-        definition_stream,
-        source_provenance,
-        event_participation,
-        view_role,
-    )?;
+    let arguments = required_tool_arguments(request, "add_workflow_owned_definition")?;
+    let workflow_slug = workflow_slug_from_arguments(arguments, "add_workflow_owned_definition")?;
+    let definition =
+        workflow_owned_definition_from_arguments(arguments, "add_workflow_owned_definition", "")?;
 
     interpret_collect_reports(&command::add_workflow_owned_definition(
         workflow_slug,
@@ -2930,11 +2972,98 @@ fn add_workflow_owned_definition_tool_text(request: &Value) -> Result<String, Sh
     .map(|reports| reports.join("\n"))
 }
 
+fn update_workflow_owned_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = required_tool_arguments(request, "update_workflow_owned_definition")?;
+    let workflow_slug =
+        workflow_slug_from_arguments(arguments, "update_workflow_owned_definition")?;
+
+    interpret_collect_reports(&command::update_workflow_owned_definition(
+        workflow_slug,
+        workflow_owned_definition_from_arguments(
+            arguments,
+            "update_workflow_owned_definition",
+            "",
+        )?,
+        workflow_owned_definition_from_arguments(
+            arguments,
+            "update_workflow_owned_definition",
+            "new_",
+        )?,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn remove_workflow_owned_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = required_tool_arguments(request, "remove_workflow_owned_definition")?;
+    let workflow_slug =
+        workflow_slug_from_arguments(arguments, "remove_workflow_owned_definition")?;
+
+    interpret_collect_reports(&command::remove_workflow_owned_definition(
+        workflow_slug,
+        workflow_owned_definition_from_arguments(
+            arguments,
+            "remove_workflow_owned_definition",
+            "",
+        )?,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn workflow_owned_definition_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+    prefix: &str,
+) -> Result<WorkflowOwnedDefinitionRecord, ShellError> {
+    let source_slice_field = format!("{prefix}source_slice");
+    let definition_kind_field = format!("{prefix}definition_kind");
+    let definition_name_field = format!("{prefix}definition_name");
+    let source_slice = arguments
+        .get(&source_slice_field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {source_slice_field}")))
+        .and_then(|raw_source_slice| {
+            WorkflowTransitionEndpoint::try_new(raw_source_slice.to_owned())
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let definition_kind = arguments
+        .get(&definition_kind_field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {definition_kind_field}")))
+        .and_then(|raw_definition_kind| {
+            parse_workflow_owned_definition_kind(raw_definition_kind)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let definition_name = arguments
+        .get(&definition_name_field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {definition_name_field}")))
+        .and_then(|raw_definition_name| {
+            parse_workflow_owned_definition_name(raw_definition_name)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let definition_stream = parse_optional_owned_definition_stream(arguments, prefix)?;
+    let source_provenance = parse_optional_owned_definition_provenance(arguments, prefix)?;
+    let event_participation =
+        parse_optional_owned_definition_event_participation(arguments, prefix)?;
+    let view_role = parse_optional_owned_definition_view_role(arguments, prefix)?;
+    build_workflow_owned_definition(
+        source_slice,
+        definition_kind,
+        definition_name,
+        definition_stream,
+        source_provenance,
+        event_participation,
+        view_role,
+    )
+}
+
 fn parse_optional_owned_definition_stream(
     arguments: &Value,
+    prefix: &str,
 ) -> Result<Option<StreamName>, ShellError> {
+    let field = format!("{prefix}definition_stream");
     arguments
-        .get("definition_stream")
+        .get(&field)
         .and_then(Value::as_str)
         .map(|raw_definition_stream| {
             parse_stream_name(raw_definition_stream)
@@ -2945,9 +3074,11 @@ fn parse_optional_owned_definition_stream(
 
 fn parse_optional_owned_definition_provenance(
     arguments: &Value,
+    prefix: &str,
 ) -> Result<Option<ModelDescription>, ShellError> {
+    let field = format!("{prefix}source_provenance");
     arguments
-        .get("source_provenance")
+        .get(&field)
         .and_then(Value::as_str)
         .map(|raw_source_provenance| {
             parse_model_description(raw_source_provenance)
@@ -2958,9 +3089,11 @@ fn parse_optional_owned_definition_provenance(
 
 fn parse_optional_owned_definition_event_participation(
     arguments: &Value,
+    prefix: &str,
 ) -> Result<Option<WorkflowEventParticipation>, ShellError> {
+    let field = format!("{prefix}event_participation");
     arguments
-        .get("event_participation")
+        .get(&field)
         .and_then(Value::as_str)
         .map(|raw_event_participation| {
             parse_workflow_event_participation(raw_event_participation)
@@ -2971,9 +3104,11 @@ fn parse_optional_owned_definition_event_participation(
 
 fn parse_optional_owned_definition_view_role(
     arguments: &Value,
+    prefix: &str,
 ) -> Result<Option<WorkflowViewRole>, ShellError> {
+    let field = format!("{prefix}view_role");
     arguments
-        .get("view_role")
+        .get(&field)
         .and_then(Value::as_str)
         .map(|raw_view_role| {
             parse_workflow_view_role(raw_view_role)

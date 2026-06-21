@@ -19,14 +19,15 @@ use crate::core::event_commands::{
     RemoveOutcomeDefinitionCommand, RemoveReadModelDefinitionCommand, RemoveSliceCommand,
     RemoveSliceScenarioCommand, RemoveTranslationDefinitionCommand, RemoveViewControlCommand,
     RemoveViewDefinitionCommand, RemoveWorkflowCommand, RemoveWorkflowCommandErrorCommand,
-    RemoveWorkflowOutcomeCommand, RemoveWorkflowTransitionCommand, ResolveConflictCommand,
-    SliceFactInput, UpdateAutomationDefinitionCommand, UpdateBitLevelDataFlowCommand,
-    UpdateBoardConnectionCommand, UpdateBoardElementCommand, UpdateCommandDefinitionCommand,
-    UpdateEventDefinitionCommand, UpdateExternalPayloadDefinitionCommand,
-    UpdateOutcomeDefinitionCommand, UpdateReadModelDefinitionCommand, UpdateSliceCommand,
-    UpdateSliceScenarioCommand, UpdateTranslationDefinitionCommand, UpdateViewControlCommand,
-    UpdateViewDefinitionCommand, UpdateWorkflowCommand, UpdateWorkflowCommandErrorCommand,
-    UpdateWorkflowOutcomeCommand, UpdateWorkflowTransitionCommand, WorkflowFactInput,
+    RemoveWorkflowOutcomeCommand, RemoveWorkflowOwnedDefinitionCommand,
+    RemoveWorkflowTransitionCommand, ResolveConflictCommand, SliceFactInput,
+    UpdateAutomationDefinitionCommand, UpdateBitLevelDataFlowCommand, UpdateBoardConnectionCommand,
+    UpdateBoardElementCommand, UpdateCommandDefinitionCommand, UpdateEventDefinitionCommand,
+    UpdateExternalPayloadDefinitionCommand, UpdateOutcomeDefinitionCommand,
+    UpdateReadModelDefinitionCommand, UpdateSliceCommand, UpdateSliceScenarioCommand,
+    UpdateTranslationDefinitionCommand, UpdateViewControlCommand, UpdateViewDefinitionCommand,
+    UpdateWorkflowCommand, UpdateWorkflowCommandErrorCommand, UpdateWorkflowOutcomeCommand,
+    UpdateWorkflowOwnedDefinitionCommand, UpdateWorkflowTransitionCommand, WorkflowFactInput,
 };
 use crate::core::events::{EventDraft, ExportedEventBody};
 
@@ -171,6 +172,8 @@ async fn dispatch_exported_event(
         | ExportedEventBody::WorkflowCommandErrorUpdated { .. }
         | ExportedEventBody::WorkflowCommandErrorRemoved { .. }
         | ExportedEventBody::WorkflowOwnedDefinitionAdded { .. }
+        | ExportedEventBody::WorkflowOwnedDefinitionUpdated { .. }
+        | ExportedEventBody::WorkflowOwnedDefinitionRemoved { .. }
         | ExportedEventBody::WorkflowTransitionEvidenceAdded { .. }
         | ExportedEventBody::WorkflowEntryLifecycleCoverageRequired { .. }
         | ExportedEventBody::WorkflowEntryLifecycleStateAdded { .. } => {
@@ -331,52 +334,8 @@ async fn dispatch_workflow_fact(
     store: &FileEventStore,
     body: &ExportedEventBody,
 ) -> Result<(), String> {
-    match body {
-        ExportedEventBody::WorkflowOutcomeUpdated {
-            workflow,
-            previous,
-            outcome,
-        } => {
-            return run_command(
-                store,
-                UpdateWorkflowOutcomeCommand::new(
-                    workflow.clone(),
-                    previous.clone(),
-                    outcome.clone(),
-                )?,
-            )
-            .await;
-        }
-        ExportedEventBody::WorkflowOutcomeRemoved { workflow, outcome } => {
-            return run_command(
-                store,
-                RemoveWorkflowOutcomeCommand::new(workflow.clone(), outcome.clone())?,
-            )
-            .await;
-        }
-        ExportedEventBody::WorkflowCommandErrorUpdated {
-            workflow,
-            previous,
-            error,
-        } => {
-            return run_command(
-                store,
-                UpdateWorkflowCommandErrorCommand::new(
-                    workflow.clone(),
-                    previous.clone(),
-                    error.clone(),
-                )?,
-            )
-            .await;
-        }
-        ExportedEventBody::WorkflowCommandErrorRemoved { workflow, error } => {
-            return run_command(
-                store,
-                RemoveWorkflowCommandErrorCommand::new(workflow.clone(), error.clone())?,
-            )
-            .await;
-        }
-        _ => {}
+    if dispatch_workflow_fact_mutation(store, body).await? {
+        return Ok(());
     }
 
     let input = match body {
@@ -419,6 +378,90 @@ async fn dispatch_workflow_fact(
         _ => return Err("dispatch_workflow_fact received a non-fact body".to_owned()),
     };
     run_command(store, AddWorkflowFactCommand::new(input)?).await
+}
+
+async fn dispatch_workflow_fact_mutation(
+    store: &FileEventStore,
+    body: &ExportedEventBody,
+) -> Result<bool, String> {
+    match body {
+        ExportedEventBody::WorkflowOutcomeUpdated {
+            workflow,
+            previous,
+            outcome,
+        } => {
+            run_command(
+                store,
+                UpdateWorkflowOutcomeCommand::new(
+                    workflow.clone(),
+                    previous.clone(),
+                    outcome.clone(),
+                )?,
+            )
+            .await?;
+            Ok(true)
+        }
+        ExportedEventBody::WorkflowOutcomeRemoved { workflow, outcome } => {
+            run_command(
+                store,
+                RemoveWorkflowOutcomeCommand::new(workflow.clone(), outcome.clone())?,
+            )
+            .await?;
+            Ok(true)
+        }
+        ExportedEventBody::WorkflowCommandErrorUpdated {
+            workflow,
+            previous,
+            error,
+        } => {
+            run_command(
+                store,
+                UpdateWorkflowCommandErrorCommand::new(
+                    workflow.clone(),
+                    previous.clone(),
+                    error.clone(),
+                )?,
+            )
+            .await?;
+            Ok(true)
+        }
+        ExportedEventBody::WorkflowCommandErrorRemoved { workflow, error } => {
+            run_command(
+                store,
+                RemoveWorkflowCommandErrorCommand::new(workflow.clone(), error.clone())?,
+            )
+            .await?;
+            Ok(true)
+        }
+        ExportedEventBody::WorkflowOwnedDefinitionUpdated {
+            workflow,
+            previous,
+            definition,
+        } => {
+            run_command(
+                store,
+                UpdateWorkflowOwnedDefinitionCommand::new(
+                    workflow.clone(),
+                    previous.clone(),
+                    definition.clone(),
+                )?,
+            )
+            .await?;
+            Ok(true)
+        }
+        ExportedEventBody::WorkflowOwnedDefinitionRemoved {
+            workflow,
+            definition,
+        } => {
+            run_command(
+                store,
+                RemoveWorkflowOwnedDefinitionCommand::new(workflow.clone(), definition.clone())?,
+            )
+            .await?;
+            Ok(true)
+        }
+        _ => Ok(false),
+    }
 }
 
 /// Slice bodies: the three structural commands (add/update/remove) plus the

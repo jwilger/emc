@@ -500,6 +500,65 @@ impl WorkflowOwnedDefinitionEffect {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowOwnedDefinitionUpdateEffect {
+    workflow_slug: WorkflowSlug,
+    previous: WorkflowOwnedDefinitionRecord,
+    replacement: WorkflowOwnedDefinitionRecord,
+}
+
+impl WorkflowOwnedDefinitionUpdateEffect {
+    pub(crate) fn new(
+        workflow_slug: WorkflowSlug,
+        previous: WorkflowOwnedDefinitionRecord,
+        replacement: WorkflowOwnedDefinitionRecord,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            previous,
+            replacement,
+        }
+    }
+
+    pub(crate) fn workflow_slug(&self) -> &WorkflowSlug {
+        &self.workflow_slug
+    }
+
+    pub(crate) fn previous(&self) -> &WorkflowOwnedDefinitionRecord {
+        &self.previous
+    }
+
+    pub(crate) fn replacement(&self) -> &WorkflowOwnedDefinitionRecord {
+        &self.replacement
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowOwnedDefinitionRemovalEffect {
+    workflow_slug: WorkflowSlug,
+    definition: WorkflowOwnedDefinitionRecord,
+}
+
+impl WorkflowOwnedDefinitionRemovalEffect {
+    pub(crate) fn new(
+        workflow_slug: WorkflowSlug,
+        definition: WorkflowOwnedDefinitionRecord,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            definition,
+        }
+    }
+
+    pub(crate) fn workflow_slug(&self) -> &WorkflowSlug {
+        &self.workflow_slug
+    }
+
+    pub(crate) fn definition(&self) -> &WorkflowOwnedDefinitionRecord {
+        &self.definition
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct WorkflowOutcomeEffect {
     workflow_slug: WorkflowSlug,
     outcome: WorkflowOutcomeRecord,
@@ -1208,6 +1267,8 @@ pub(crate) enum Effect {
     UpdateWorkflowCommandErrorFromWorkflow(WorkflowCommandErrorUpdateEffect),
     RemoveWorkflowCommandErrorFromWorkflow(WorkflowCommandErrorRemovalEffect),
     AddWorkflowOwnedDefinitionFromWorkflow(WorkflowOwnedDefinitionEffect),
+    UpdateWorkflowOwnedDefinitionFromWorkflow(WorkflowOwnedDefinitionUpdateEffect),
+    RemoveWorkflowOwnedDefinitionFromWorkflow(WorkflowOwnedDefinitionRemovalEffect),
     AddWorkflowOutcomeFromWorkflow(WorkflowOutcomeEffect),
     UpdateWorkflowOutcomeFromWorkflow(WorkflowOutcomeUpdateEffect),
     RemoveWorkflowOutcomeFromWorkflow(WorkflowOutcomeRemovalEffect),
