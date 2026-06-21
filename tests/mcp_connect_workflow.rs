@@ -1170,6 +1170,155 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn mcp_stdio_updates_workflow_entry_lifecycle_state() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_application_entry_workflow(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(update_workflow_entry_lifecycle_state_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "\"update_workflow_entry_lifecycle_state\"",
+            ))
+            .stdout(predicate::str::contains(
+                "updated workflow entry lifecycle state fresh_uninitialized on workflow application-entry",
+            ));
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/ApplicationEntry.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/ApplicationEntry.qnt"))?;
+
+        assert!(lean.contains("evidence := \"entry-state view confirms first-arrival routing\""));
+        assert!(quint.contains("evidence: \"entry-state view confirms first-arrival routing\""));
+        assert!(
+            !lean.contains("entry-state view distinguishes first arrival before initialization")
+        );
+        assert!(
+            !quint.contains("entry-state view distinguishes first arrival before initialization")
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_stdio_removes_workflow_entry_lifecycle_coverage_and_state() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        initialize_application_entry_workflow(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(remove_workflow_entry_lifecycle_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "\"remove_workflow_entry_lifecycle_coverage\"",
+            ))
+            .stdout(predicate::str::contains(
+                "\"remove_workflow_entry_lifecycle_state\"",
+            ))
+            .stdout(predicate::str::contains(
+                "removed workflow entry lifecycle coverage requirement from workflow application-entry",
+            ))
+            .stdout(predicate::str::contains(
+                "removed workflow entry lifecycle state fresh_uninitialized from workflow application-entry",
+            ));
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/ApplicationEntry.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/ApplicationEntry.qnt"))?;
+
+        assert!(lean.contains("def workflowRequiresEntryLifecycleCoverage : Bool := false"));
+        assert!(quint.contains("val workflowRequiresEntryLifecycleCoverage = false"));
+        assert!(
+            lean.contains(
+                "def workflowEntryLifecycleStates : List WorkflowEntryLifecycleState := []"
+            )
+        );
+        assert!(
+            quint.contains(
+                "val workflowEntryLifecycleStates: List[WorkflowEntryLifecycleState] = []"
+            )
+        );
+
+        Ok(())
+    }
+
+    fn initialize_application_entry_workflow(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "application-entry",
+                "--name",
+                "Application entry",
+                "--description",
+                "Actor enters the application.",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "application-entry",
+                "--slug",
+                "entry-state",
+                "--name",
+                "Entry state",
+                "--type",
+                "state_view",
+                "--description",
+                "Slice description.",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "mark",
+                "workflow-entry-lifecycle-required",
+                "--workflow",
+                "application-entry",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-entry-lifecycle-state",
+                "--workflow",
+                "application-entry",
+                "--state",
+                "fresh_uninitialized",
+                "--step",
+                "entry-state",
+                "--evidence",
+                "entry-state view distinguishes first arrival before initialization",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
     fn add_slice(cwd: &Path, slug: &str, name: &str) -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args([
@@ -1519,6 +1668,23 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_entry_lifecycle_state\",\"arguments\":{\"workflow\":\"application-entry\",\"state\":\"initialized_authenticated\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes initialized authenticated sessions\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_entry_lifecycle_state\",\"arguments\":{\"workflow\":\"application-entry\",\"state\":\"partially_configured\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes partially configured accounts\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_entry_lifecycle_state\",\"arguments\":{\"workflow\":\"application-entry\",\"state\":\"fully_configured\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes fully configured accounts\"}}}\n",
+        )
+    }
+
+    fn update_workflow_entry_lifecycle_state_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_workflow_entry_lifecycle_state\",\"arguments\":{\"workflow\":\"application-entry\",\"state\":\"fresh_uninitialized\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes first arrival before initialization\",\"new_state\":\"fresh_uninitialized\",\"new_step\":\"entry-state\",\"new_evidence\":\"entry-state view confirms first-arrival routing\"}}}\n",
+        )
+    }
+
+    fn remove_workflow_entry_lifecycle_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_workflow_entry_lifecycle_coverage\",\"arguments\":{\"workflow\":\"application-entry\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_workflow_entry_lifecycle_state\",\"arguments\":{\"workflow\":\"application-entry\",\"state\":\"fresh_uninitialized\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes first arrival before initialization\"}}}\n",
         )
     }
 }

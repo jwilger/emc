@@ -1447,6 +1447,145 @@ mod tests {
     }
 
     #[test]
+    fn check_rebuilds_updated_workflow_entry_lifecycle_from_exported_events()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        create_project_with_workflow_and_slice(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "mark",
+                "workflow-entry-lifecycle-required",
+                "--workflow",
+                "open-ticket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_workflow_entry_lifecycle_state(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "workflow-entry-lifecycle-state",
+                "--workflow",
+                "open-ticket",
+                "--state",
+                "fresh_uninitialized",
+                "--step",
+                "capture-ticket",
+                "--evidence",
+                "capture-ticket view distinguishes first arrival before initialization",
+                "--new-state",
+                "fresh_uninitialized",
+                "--new-step",
+                "capture-ticket",
+                "--new-evidence",
+                "capture-ticket view confirms first-arrival routing",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        fs::remove_file(temp_dir.path().join("emc.toml"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/lean"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let workflow_lean = fs::read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        assert!(
+            workflow_lean
+                .contains("evidence := \"capture-ticket view confirms first-arrival routing\""),
+            "updated workflow lifecycle state must be rebuilt from exported events"
+        );
+        assert!(
+            !workflow_lean
+                .contains("capture-ticket view distinguishes first arrival before initialization"),
+            "old workflow lifecycle state evidence must not be rebuilt after update"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_rebuilds_removed_workflow_entry_lifecycle_from_exported_events()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        create_project_with_workflow_and_slice(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "mark",
+                "workflow-entry-lifecycle-required",
+                "--workflow",
+                "open-ticket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_workflow_entry_lifecycle_state(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "workflow-entry-lifecycle-required",
+                "--workflow",
+                "open-ticket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "workflow-entry-lifecycle-state",
+                "--workflow",
+                "open-ticket",
+                "--state",
+                "fresh_uninitialized",
+                "--step",
+                "capture-ticket",
+                "--evidence",
+                "capture-ticket view distinguishes first arrival before initialization",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        fs::remove_file(temp_dir.path().join("emc.toml"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/lean"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let workflow_lean = fs::read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        assert!(
+            workflow_lean.contains("def workflowRequiresEntryLifecycleCoverage : Bool := false"),
+            "removed workflow lifecycle coverage requirement must not be rebuilt from exported events"
+        );
+        assert!(
+            workflow_lean.contains(
+                "def workflowEntryLifecycleStates : List WorkflowEntryLifecycleState := []"
+            ),
+            "removed workflow lifecycle state must not be rebuilt from exported events"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn check_rebuilds_workflow_connections_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
@@ -2554,6 +2693,26 @@ mod tests {
                 "capture-ticket view owns the review-ticket-screen navigation control",
                 "--target-evidence",
                 "review-ticket workflow step exposes review-ticket-screen as its entry view",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+        Ok(())
+    }
+
+    fn add_workflow_entry_lifecycle_state(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-entry-lifecycle-state",
+                "--workflow",
+                "open-ticket",
+                "--state",
+                "fresh_uninitialized",
+                "--step",
+                "capture-ticket",
+                "--evidence",
+                "capture-ticket view distinguishes first arrival before initialization",
             ])
             .current_dir(temp_dir.path())
             .assert()

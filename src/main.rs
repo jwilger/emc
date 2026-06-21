@@ -267,6 +267,18 @@ enum Command {
         workflow_slug: WorkflowSlug,
         coverage: WorkflowEntryLifecycleStateRecord,
     },
+    UpdateWorkflowEntryLifecycleState {
+        workflow_slug: WorkflowSlug,
+        previous: WorkflowEntryLifecycleStateRecord,
+        replacement: WorkflowEntryLifecycleStateRecord,
+    },
+    RemoveWorkflowEntryLifecycleState {
+        workflow_slug: WorkflowSlug,
+        coverage: WorkflowEntryLifecycleStateRecord,
+    },
+    RemoveWorkflowEntryLifecycleCoverage {
+        workflow_slug: WorkflowSlug,
+    },
     AddWorkflowOutcome {
         workflow_slug: WorkflowSlug,
         outcome: WorkflowOutcomeRecord,
@@ -521,6 +533,21 @@ fn run_workflow_commands(command: Command) -> Result<(), ShellError> {
             workflow_slug,
             evidence,
         )),
+        Command::AddWorkflowEntryLifecycleState { .. }
+        | Command::UpdateWorkflowEntryLifecycleState { .. }
+        | Command::RemoveWorkflowEntryLifecycleState { .. }
+        | Command::RemoveWorkflowEntryLifecycleCoverage { .. } => {
+            run_workflow_entry_lifecycle_commands(command)
+        }
+        Command::AddWorkflowOutcome { .. }
+        | Command::UpdateWorkflowOutcome { .. }
+        | Command::RemoveWorkflowOutcome { .. } => run_workflow_outcome_commands(command),
+        other => run_query_commands(other),
+    }
+}
+
+fn run_workflow_entry_lifecycle_commands(command: Command) -> Result<(), ShellError> {
+    match command {
         Command::AddWorkflowEntryLifecycleState {
             workflow_slug,
             coverage,
@@ -528,6 +555,31 @@ fn run_workflow_commands(command: Command) -> Result<(), ShellError> {
             workflow_slug,
             coverage,
         )),
+        Command::UpdateWorkflowEntryLifecycleState {
+            workflow_slug,
+            previous,
+            replacement,
+        } => interpret(&command::update_workflow_entry_lifecycle_state(
+            workflow_slug,
+            previous,
+            replacement,
+        )),
+        Command::RemoveWorkflowEntryLifecycleState {
+            workflow_slug,
+            coverage,
+        } => interpret(&command::remove_workflow_entry_lifecycle_state(
+            workflow_slug,
+            coverage,
+        )),
+        Command::RemoveWorkflowEntryLifecycleCoverage { workflow_slug } => interpret(
+            &command::remove_workflow_entry_lifecycle_coverage(workflow_slug),
+        ),
+        other => run_workflow_commands(other),
+    }
+}
+
+fn run_workflow_outcome_commands(command: Command) -> Result<(), ShellError> {
+    match command {
         Command::AddWorkflowOutcome {
             workflow_slug,
             outcome,
@@ -545,7 +597,7 @@ fn run_workflow_commands(command: Command) -> Result<(), ShellError> {
             workflow_slug,
             outcome,
         } => interpret(&command::remove_workflow_outcome(workflow_slug, outcome)),
-        other => run_query_commands(other),
+        other => run_workflow_commands(other),
     }
 }
 
@@ -1478,6 +1530,9 @@ fn parse_cli_2(arguments: &[String]) -> Result<Cli, ShellError> {
     if let Some(cli) = parse_workflow_transition_evidence_mutation_cli(arguments)? {
         return Ok(cli);
     }
+    if let Some(cli) = parse_workflow_entry_lifecycle_mutation_cli(arguments)? {
+        return Ok(cli);
+    }
 
     match arguments {
         [
@@ -1668,6 +1723,64 @@ fn parse_workflow_transition_evidence_flags(
             target_evidence,
         ))
     }
+}
+
+fn parse_workflow_entry_lifecycle_mutation_cli(
+    arguments: &[String],
+) -> Result<Option<Cli>, ShellError> {
+    let [command, subject, ..] = arguments else {
+        return Ok(None);
+    };
+    match (command.as_str(), subject.as_str()) {
+        ("remove", "workflow-entry-lifecycle-required") => {
+            let workflow_slug = parse_required_workflow_slug_flag(arguments)?;
+            Ok(Some(Cli {
+                command: Command::RemoveWorkflowEntryLifecycleCoverage { workflow_slug },
+            }))
+        }
+        ("update", "workflow-entry-lifecycle-state") => {
+            let workflow_slug = parse_required_workflow_slug_flag(arguments)?;
+            Ok(Some(Cli {
+                command: Command::UpdateWorkflowEntryLifecycleState {
+                    workflow_slug,
+                    previous: parse_workflow_entry_lifecycle_state_flags(arguments, "")?,
+                    replacement: parse_workflow_entry_lifecycle_state_flags(arguments, "new-")?,
+                },
+            }))
+        }
+        ("remove", "workflow-entry-lifecycle-state") => {
+            let workflow_slug = parse_required_workflow_slug_flag(arguments)?;
+            Ok(Some(Cli {
+                command: Command::RemoveWorkflowEntryLifecycleState {
+                    workflow_slug,
+                    coverage: parse_workflow_entry_lifecycle_state_flags(arguments, "")?,
+                },
+            }))
+        }
+        _ => Ok(None),
+    }
+}
+
+fn parse_workflow_entry_lifecycle_state_flags(
+    arguments: &[String],
+    prefix: &str,
+) -> Result<WorkflowEntryLifecycleStateRecord, ShellError> {
+    let state = required_cli_flag(arguments, &format!("--{prefix}state")).and_then(|state| {
+        parse_workflow_entry_lifecycle_state_name(state)
+            .map_err(|error| ShellError::message(error.to_string()))
+    })?;
+    let step = required_cli_flag(arguments, &format!("--{prefix}step")).and_then(|step| {
+        parse_workflow_transition_endpoint(step)
+            .map_err(|error| ShellError::message(error.to_string()))
+    })?;
+    let evidence =
+        required_cli_flag(arguments, &format!("--{prefix}evidence")).and_then(|evidence| {
+            parse_workflow_entry_lifecycle_evidence_text(evidence)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    Ok(WorkflowEntryLifecycleStateRecord::new(
+        state, step, evidence,
+    ))
 }
 
 fn parse_required_workflow_slug_flag(arguments: &[String]) -> Result<WorkflowSlug, ShellError> {
