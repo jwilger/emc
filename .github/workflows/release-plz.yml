@@ -1,0 +1,120 @@
+# Copyright 2026 John Wilger
+#
+# Two-phase release-plz pipeline: `release-plz-pr` keeps a version-bump +
+# changelog PR up to date on every push to main, and `release-plz-release`
+# publishes newly-versioned crates to crates.io. Both jobs run independently
+# (no `needs:` between them, matching release-plz's own recommended layout)
+# since `release-plz release-pr`/`release-plz release` are idempotent: a run
+# that finds nothing new to do is a no-op rather than an error.
+#
+# This repo's flake.nix pins Lean4/Quint as *runtime* tool dependencies
+# exercised by the test suite (see tests/verify_project.rs et al.), not by
+# `cargo build`/`cargo publish`'s verification build (no build.rs, no
+# compile-time codegen shells out to them), so release-plz's own build/publish
+# steps do not need the Nix devShell -- a plain Rust toolchain is sufficient
+# here, matching the fleet-wide release-plz pattern.
+#
+# Git-write auth is minted from the slipstream-code-new GitHub App;
+# commits/tags are SSH-signed with the org's RELEASE_SIGNING_KEY so they show
+# up as Verified regardless of which identity the App token belongs to.
+
+name: Release-plz
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-plz-pr:
+    name: release-plz PR
+    if: ${{ github.repository == 'slipstream-code-new/emc' }}
+    runs-on: [self-hosted, self-hosted-gregor]
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: release-plz-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - name: Mint slipstream-code-new GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.GH_AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.GH_AUTOMATION_APP_PRIVATE_KEY }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: true
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Configure signed-commit identity
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          RELEASE_SIGNING_NAME: ${{ vars.RELEASE_SIGNING_NAME }}
+          RELEASE_SIGNING_EMAIL: ${{ vars.RELEASE_SIGNING_EMAIL }}
+        run: ./.github/scripts/configure-release-plz-git-signing.sh
+
+      - name: Run release-plz release-pr
+        uses: MarcoIeni/release-plz-action@v0.5.130
+        with:
+          command: release-pr
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+
+  release-plz-release:
+    name: release-plz publish
+    if: ${{ github.repository == 'slipstream-code-new/emc' }}
+    runs-on: [self-hosted, self-hosted-gregor]
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Mint slipstream-code-new GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.GH_AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.GH_AUTOMATION_APP_PRIVATE_KEY }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: true
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Configure signed-tag identity
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          RELEASE_SIGNING_NAME: ${{ vars.RELEASE_SIGNING_NAME }}
+          RELEASE_SIGNING_EMAIL: ${{ vars.RELEASE_SIGNING_EMAIL }}
+        run: ./.github/scripts/configure-release-plz-git-signing.sh
+
+      - name: Run release-plz release
+        uses: MarcoIeni/release-plz-action@v0.5.130
+        with:
+          command: release
+          token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}

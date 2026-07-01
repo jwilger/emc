@@ -2,13 +2,14 @@
 
 [workspace]
 release_always = false
-repo_url = "https://git.johnwilger.com/Slipstream/emc"
+repo_url = "https://github.com/slipstream-code-new/emc"
 pr_branch_prefix = "release-plz-"
 publish = true
 
-# NOTE: the release PR title and body are built by
-# `.forgejo/scripts/create-release-plz-release-pr.sh` (which opens the PR via the
-# Forgejo API), so release-plz's own `pr_name`/`pr_body` are not used here.
+# The release PR title and body are release-plz's own defaults (`pr_name`/
+# `pr_body` are unset here) -- the custom Gitea-specific release PR script
+# this repo used before the GitHub Actions migration has been retired in
+# favor of MarcoIeni/release-plz-action's native `release-pr` command.
 
 # Keep the project copyright header as the first line of the regenerated
 # CHANGELOG.md. Without this, release-plz rewrites the file with its default

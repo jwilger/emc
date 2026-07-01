@@ -1,5 +1,11 @@
 #!/usr/bin/env sh
 # Copyright 2026 John Wilger
+#
+# Ported from .forgejo/scripts/configure-release-plz-git-signing.sh during the
+# Forgejo -> GitHub Actions migration. Configures git commit/tag signing from
+# the RELEASE_SIGNING_KEY secret, auto-detecting whether it's an SSH or a GPG
+# private key. Scoped to a per-job GIT_CONFIG_GLOBAL under RUNNER_TEMP so
+# concurrent jobs on the same self-hosted runner don't race on ~/.gitconfig.
 
 set -eu
 
@@ -14,6 +20,9 @@ chmod 700 "$signing_dir"
 
 GIT_CONFIG_GLOBAL="${GIT_CONFIG_GLOBAL:-$signing_dir/gitconfig}"
 export GIT_CONFIG_GLOBAL
+if [ -n "${GITHUB_ENV:-}" ]; then
+  printf 'GIT_CONFIG_GLOBAL=%s\n' "$GIT_CONFIG_GLOBAL" >> "$GITHUB_ENV"
+fi
 
 signing_key_path="$signing_dir/release-signing-key"
 printf '%s\n' "$RELEASE_SIGNING_KEY" | sed 's/\\n/\
@@ -32,6 +41,7 @@ configure_ssh_signing() {
   git config --global gpg.ssh.program "$ssh_keygen"
   git config --global user.signingkey "$signing_key_path"
   git config --global commit.gpgsign true
+  git config --global tag.gpgsign true
 }
 
 configure_gpg_signing() {
@@ -45,6 +55,9 @@ configure_gpg_signing() {
   export GNUPGHOME="$signing_dir/gnupg"
   mkdir -p "$GNUPGHOME"
   chmod 700 "$GNUPGHOME"
+  if [ -n "${GITHUB_ENV:-}" ]; then
+    printf 'GNUPGHOME=%s\n' "$GNUPGHOME" >> "$GITHUB_ENV"
+  fi
 
   "$gpg_bin" --batch --import "$signing_key_path"
   rm -f "$signing_key_path"
@@ -67,6 +80,7 @@ configure_gpg_signing() {
   git config --global gpg.program "$gpg_wrapper_path"
   git config --global user.signingkey "$signing_key"
   git config --global commit.gpgsign true
+  git config --global tag.gpgsign true
 }
 
 if grep -q "BEGIN PGP PRIVATE KEY BLOCK" "$signing_key_path"; then
@@ -79,4 +93,18 @@ elif grep -q "BEGIN OPENSSH PRIVATE KEY" "$signing_key_path" \
 else
   echo "RELEASE_SIGNING_KEY must contain an SSH or GPG private signing key" >&2
   exit 1
+fi
+
+if [ -n "${RELEASE_SIGNING_NAME:-}" ]; then
+  git config --global user.name "$RELEASE_SIGNING_NAME"
+  if [ -n "${GITHUB_ENV:-}" ]; then
+    printf 'GIT_AUTHOR_NAME=%s\nGIT_COMMITTER_NAME=%s\n' "$RELEASE_SIGNING_NAME" "$RELEASE_SIGNING_NAME" >> "$GITHUB_ENV"
+  fi
+fi
+
+if [ -n "${RELEASE_SIGNING_EMAIL:-}" ]; then
+  git config --global user.email "$RELEASE_SIGNING_EMAIL"
+  if [ -n "${GITHUB_ENV:-}" ]; then
+    printf 'GIT_AUTHOR_EMAIL=%s\nGIT_COMMITTER_EMAIL=%s\n' "$RELEASE_SIGNING_EMAIL" "$RELEASE_SIGNING_EMAIL" >> "$GITHUB_ENV"
+  fi
 fi
