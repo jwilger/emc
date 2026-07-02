@@ -14,7 +14,7 @@
 # steps do not need the Nix devShell -- a plain Rust toolchain is sufficient
 # here, matching the fleet-wide release-plz pattern.
 #
-# Git-write auth is minted from the slipstream-code-new GitHub App;
+# Git-write auth is minted from the slipstream-eng GitHub App;
 # commits/tags are SSH-signed with the org's RELEASE_SIGNING_KEY so they show
 # up as Verified regardless of which identity the App token belongs to.
 
@@ -31,7 +31,7 @@ permissions:
 jobs:
   release-plz-pr:
     name: release-plz PR
-    if: ${{ github.repository == 'slipstream-code-new/emc' }}
+    if: ${{ github.repository == 'slipstream-eng/emc' }}
     runs-on: [self-hosted, self-hosted-gregor]
     timeout-minutes: 30
     permissions:
@@ -41,7 +41,7 @@ jobs:
       group: release-plz-${{ github.ref }}
       cancel-in-progress: false
     steps:
-      - name: Mint slipstream-code-new GitHub App token
+      - name: Mint slipstream-eng GitHub App token
         id: app-token
         uses: actions/create-github-app-token@v2
         with:
@@ -77,14 +77,14 @@ jobs:
 
   release-plz-release:
     name: release-plz publish
-    if: ${{ github.repository == 'slipstream-code-new/emc' }}
+    if: ${{ github.repository == 'slipstream-eng/emc' }}
     runs-on: [self-hosted, self-hosted-gregor]
     timeout-minutes: 30
     permissions:
       contents: write
       pull-requests: read
     steps:
-      - name: Mint slipstream-code-new GitHub App token
+      - name: Mint slipstream-eng GitHub App token
         id: app-token
         uses: actions/create-github-app-token@v2
         with:
