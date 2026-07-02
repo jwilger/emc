@@ -32,7 +32,7 @@ jobs:
   release-plz-pr:
     name: release-plz PR
     if: ${{ github.repository == 'slipstream-eng/emc' }}
-    runs-on: [self-hosted, self-hosted-gregor]
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: write
@@ -78,7 +78,7 @@ jobs:
   release-plz-release:
     name: release-plz publish
     if: ${{ github.repository == 'slipstream-eng/emc' }}
-    runs-on: [self-hosted, self-hosted-gregor]
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: write
