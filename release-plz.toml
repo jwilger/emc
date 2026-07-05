@@ -2,7 +2,7 @@
 
 [workspace]
 release_always = false
-repo_url = "https://github.com/slipstream-code-new/emc"
+repo_url = "https://github.com/jwilger/emc"
 pr_branch_prefix = "release-plz-"
 publish = true
 
