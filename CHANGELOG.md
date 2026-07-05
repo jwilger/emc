@@ -7,6 +7,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.12](https://github.com/jwilger/emc/compare/v0.1.11...v0.1.12) - 2026-07-05
+
+### Other
+
+- migrate merge queue from Trunk to Mergify ([#8](https://github.com/jwilger/emc/pull/8))
+- update repository references after transfer ([#3](https://github.com/jwilger/emc/pull/3))
+- submit pull requests to Trunk merge queue ([#4](https://github.com/jwilger/emc/pull/4))
+- update gha-workflows references for org rename to slipstream-eng
+- Migrate CI/CD from Forgejo Actions to GitHub Actions
+- *(workflows)* remove redundant main checks
+
 ## [0.1.11](https://git.johnwilger.com/Slipstream/emc/compare/v0.1.10...v0.1.11) - 2026-06-21
 
 ### Added
