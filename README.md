@@ -31,7 +31,7 @@ and Quint artifact emission, exported event replay for project/workflow/slice,
 slice-fact, review, conflict-resolution, and workflow-readiness events, strict
 lint guardrails, and package smoke tests.
 The formal metamodel encodes the current rule inventory in
-[docs/event-model/formal-modeling-rules.md](https://git.johnwilger.com/Slipstream/emc/src/branch/main/docs/event-model/formal-modeling-rules.md).
+[docs/event-model/formal-modeling-rules.md](https://github.com/jwilger/emc/blob/main/docs/event-model/formal-modeling-rules.md).
 
 ## Why Lean4 and Quint
 
@@ -325,7 +325,7 @@ guardrails, not an independent semantic validator for event-model correctness.
 
 The acceptance checklist for the formal metamodel and MCP authoring workflow is
 documented in
-[docs/event-model/formal-modeling-rules.md](https://git.johnwilger.com/Slipstream/emc/src/branch/main/docs/event-model/formal-modeling-rules.md).
+[docs/event-model/formal-modeling-rules.md](https://github.com/jwilger/emc/blob/main/docs/event-model/formal-modeling-rules.md).
 
 Information completeness means every datum that flows through the modeled system
 is represented down to source, transformation or projection, target, and

@@ -2,7 +2,7 @@
 
 # Event-Sourced EMC Redesign Plan
 
-Redesign EMC so every mutating CLI/MCP operation appends domain events through eventcore 0.8.0 and projects Lean4/Quint artifacts from those events. This addresses issue #41 (https://git.johnwilger.com/Slipstream/emc/issues/41) and removes the delimiter-fragile artifact-state path exposed by issue #42 (https://git.johnwilger.com/Slipstream/emc/issues/42).
+Redesign EMC so every mutating CLI/MCP operation appends domain events through eventcore 0.8.0 and projects Lean4/Quint artifacts from those events. This addresses issue #41 (https://github.com/jwilger/emc/issues/41) and removes the delimiter-fragile artifact-state path exposed by issue #42 (https://github.com/jwilger/emc/issues/42).
 
 Use eventcore/eventcore-sqlite 0.8.0 from crates.io, with normal commands using `#[derive(Command)]`, `#[stream]`, `StreamResolver`, and `require!`.
 
