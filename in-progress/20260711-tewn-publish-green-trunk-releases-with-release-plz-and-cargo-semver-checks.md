@@ -5,6 +5,9 @@ blocks: [20260711-6d24-accept-and-complete-github-issue-1-mcp-project-root-attes
 tags: []
 pr_mr_url: 
 pr_mr_status: 
+claim:
+  host: unknown
+  session: unknown
 ---
 
 ## Summary
