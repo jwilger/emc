@@ -23,3 +23,4 @@ claim:
 ## Notes / Log
 
 - 2026-07-11: Initialized the signed tasks branch, installed the Tiber scaffold, and implemented worktree lifecycle commands with behavior tests.
+- 2026-07-11: PR #11 merged. Direct-trunk rules, Actions defaults, external-contributor approval policy, squash-only external PR settings, and local hooks are configured.
