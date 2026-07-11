@@ -16,7 +16,7 @@ claim:
 
 ## Acceptance criteria
 
-- [ ] Direct signed trunk workflow, worktree lifecycle commands, guards, Tiber integration, Codex configuration, and GitHub repository controls are operational.
+- [x] Direct signed trunk workflow, worktree lifecycle commands, guards, Tiber integration, Codex configuration, and GitHub repository controls are operational.
 
 ## Subtasks
 
