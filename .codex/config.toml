@@ -1,5 +1,8 @@
 # Copyright 2026 John Wilger
 
+[plugins."tiber@ai-plugins"]
+enabled = true
+
 [mcp_servers.emc]
 command = "/home/jwilger/.build/cargo/debug/emc"
 args = ["mcp", "stdio"]
