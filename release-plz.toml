@@ -9,6 +9,7 @@ publish = true
 
 [[package]]
 name = "emc"
+git_release_enable = true
 semver_check = true
 
 # Keep the project copyright header as the first line of the regenerated
