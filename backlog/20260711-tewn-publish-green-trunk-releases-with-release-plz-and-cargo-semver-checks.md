@@ -1,6 +1,6 @@
 ---
 title: Publish green trunk releases with release-plz and cargo-semver-checks
-blocked_by: []
+blocked_by: [20260711-53jx-adopt-direct-trunk-codex-tiber-and-linked-worktree-workflow]
 blocks: []
 tags: []
 pr_mr_url: 
