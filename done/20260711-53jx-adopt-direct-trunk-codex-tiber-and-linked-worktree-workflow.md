@@ -5,9 +5,6 @@ blocks: [20260711-tewn-publish-green-trunk-releases-with-release-plz-and-cargo-s
 tags: []
 pr_mr_url: https://github.com/jwilger/emc/pull/11
 pr_mr_status: merged
-claim:
-  host: unknown
-  session: unknown
 ---
 
 ## Summary
