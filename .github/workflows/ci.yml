@@ -198,6 +198,8 @@ jobs:
           RELEASE_PLZ_CONFIG: ${{ runner.temp }}/release-plz.toml
         run: |
           nix develop --command release-plz release --config "$RELEASE_PLZ_CONFIG"
+          git remote set-url origin \
+            "https://x-access-token:${GIT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           "$RUNNER_TEMP/complete-published-release.sh" \
             "${{ steps.release_update.outputs.version }}"
 
