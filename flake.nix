@@ -224,6 +224,7 @@
             cargo-deny
             cargo-mutants
             cargo-nextest
+            cargo-semver-checks
             cargo-watch
             bats
             forgejo-mcp

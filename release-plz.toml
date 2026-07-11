@@ -1,15 +1,15 @@
 # Copyright 2026 John Wilger
 
 [workspace]
-release_always = false
+release_always = true
+features_always_increment_minor = true
 repo_url = "https://github.com/jwilger/emc"
 pr_branch_prefix = "release-plz-"
 publish = true
 
-# The release PR title and body are release-plz's own defaults (`pr_name`/
-# `pr_body` are unset here) -- the custom Gitea-specific release PR script
-# this repo used before the GitHub Actions migration has been retired in
-# favor of MarcoIeni/release-plz-action's native `release-pr` command.
+[[package]]
+name = "emc"
+semver_check = true
 
 # Keep the project copyright header as the first line of the regenerated
 # CHANGELOG.md. Without this, release-plz rewrites the file with its default

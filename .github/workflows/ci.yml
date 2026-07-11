@@ -43,6 +43,14 @@ jobs:
       - name: Worktree lifecycle
         run: nix develop --command bats tests/worktree_workflow.bats
 
+      - name: Release lifecycle helpers
+        run: >-
+          nix develop --command bats
+          tests/release_trunk_selection.bats
+          tests/release_update.bats
+          tests/release_issue_sync.bats
+          tests/release_versioning_probe.bats
+
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -85,3 +93,103 @@ jobs:
 
       - name: Run flake check
         run: nix flake check --print-build-logs
+
+  release:
+    name: Release green trunk
+    if: >-
+      github.repository == 'jwilger/emc' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: [lint, test, flake-check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      issues: write
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout green trunk
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@a7ad9c4f0c65208097f4d34f3cfa1913b80cce5c # main, 2026-07-11
+
+      - name: Enable Nix magic cache
+        uses: DeterminateSystems/magic-nix-cache-action@76aaf8814cdb385b86597c32b8c51b66b69b0839 # main, 2026-07-11
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2.8.1
+
+      - name: Load release secrets
+        id: load_secrets
+        uses: 1password/load-secrets-action@66b1d1ae996b3f3482c8aa1c29512d87235c2a93 # v4.0.0
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          RELEASE_SIGNING_KEY: op://Github Secrets/RELEASE_SIGNING_KEY/private key?ssh-format=openssh
+          CARGO_REGISTRY_TOKEN: op://Github Secrets/CARGO_REGISTRY_TOKEN/credential
+
+      - name: Configure signed release identity
+        env:
+          RELEASE_SIGNING_KEY: ${{ steps.load_secrets.outputs.RELEASE_SIGNING_KEY }}
+          RELEASE_SIGNING_NAME: ${{ vars.RELEASE_SIGNING_NAME }}
+          RELEASE_SIGNING_EMAIL: ${{ vars.RELEASE_SIGNING_EMAIL }}
+        run: ./.github/scripts/configure-release-plz-git-signing.sh
+
+      - name: Confirm this run still tests current trunk
+        id: current_trunk
+        run: |
+          git fetch origin main
+          ./scripts/select-release-trunk.sh
+
+      - name: Calculate release update with SemVer evidence
+        if: steps.current_trunk.outputs.current == 'true'
+        run: nix develop --command ./scripts/release-green-trunk-update.sh
+
+      - name: Commit the generated release update
+        id: release_update
+        if: steps.current_trunk.outputs.current == 'true'
+        run: |
+          version="$(nix develop --command cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "emc") | .version')"
+          test -n "$version"
+          if ! git diff --quiet -- Cargo.toml Cargo.lock CHANGELOG.md; then
+            git add Cargo.toml Cargo.lock CHANGELOG.md
+            git commit -S -m "chore(release): v${version}"
+            git push origin HEAD:main
+          elif [ "$(git log -1 --format=%s)" != "chore(release): v${version}" ]; then
+            printf 'has_release=false\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          previous_revision="$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)"
+          printf 'has_release=true\nversion=%s\nprevious_revision=%s\n' \
+            "$version" "$previous_revision" >> "$GITHUB_OUTPUT"
+
+      - name: Publish and tag the generated release
+        if: >-
+          steps.current_trunk.outputs.current == 'true' &&
+          steps.release_update.outputs.has_release == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.load_secrets.outputs.CARGO_REGISTRY_TOKEN }}
+        run: nix develop --command release-plz release
+
+      - name: Synchronize released public issues
+        if: >-
+          steps.current_trunk.outputs.current == 'true' &&
+          steps.release_update.outputs.has_release == 'true'
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          PREVIOUS_REVISION: ${{ steps.release_update.outputs.previous_revision }}
+          RELEASE_VERSION: ${{ steps.release_update.outputs.version }}
+        run: |
+          ./scripts/release-issue-sync.sh \
+            "$PREVIOUS_REVISION" \
+            HEAD \
+            "$RELEASE_VERSION" \
+            "https://github.com/${GITHUB_REPOSITORY}/releases/tag/v${RELEASE_VERSION}"
