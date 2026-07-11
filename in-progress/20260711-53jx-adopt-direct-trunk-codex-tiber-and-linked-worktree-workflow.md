@@ -4,7 +4,7 @@ blocked_by: []
 blocks: [20260711-tewn-publish-green-trunk-releases-with-release-plz-and-cargo-semver-checks]
 tags: []
 pr_mr_url: https://github.com/jwilger/emc/pull/11
-pr_mr_status: checks-pending
+pr_mr_status: merged
 claim:
   host: unknown
   session: unknown
