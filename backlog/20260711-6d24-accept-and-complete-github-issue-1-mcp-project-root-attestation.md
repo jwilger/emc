@@ -13,6 +13,8 @@ pr_mr_status:
 
 ## Acceptance criteria
 
+- [ ] Every mutating MCP tool rejects a mismatched canonical project root before mutation, while project_context reports the server root.
+
 ## Subtasks
 
 ## Notes / Log
