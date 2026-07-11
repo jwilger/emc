@@ -21,3 +21,5 @@ claim:
 ## Subtasks
 
 ## Notes / Log
+
+- 2026-07-11: Starting release-plz direct-trunk migration after the green direct-trunk workflow task completed.
