@@ -3,10 +3,10 @@
 name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
     types: [opened, synchronize, reopened]
-  merge_group:
-    types: [checks_requested]
   workflow_dispatch:
 
 permissions:
@@ -39,6 +39,9 @@ jobs:
 
       - name: Clippy
         run: nix develop --command just clippy
+
+      - name: Worktree lifecycle
+        run: nix develop --command bats tests/worktree_workflow.bats
 
   test:
     name: Test

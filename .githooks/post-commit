@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+# Copyright 2026 John Wilger
+
+set -eu
+
+if command -v tiber >/dev/null 2>&1; then
+  "$(git rev-parse --show-toplevel)/.githooks/post-commit.tiber"
+fi

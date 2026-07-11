@@ -6,6 +6,10 @@
 *.swp
 *.swo
 
+# Tiber local working copy and linked worktrees
+.tasks
+/.worktrees/
+
 # Rust build outputs
 /target/
 /.build/

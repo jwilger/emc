@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+# Copyright 2026 John Wilger
+
+set -eu
+
+"$(git rev-parse --show-toplevel)/scripts/worktree-guard.sh"
