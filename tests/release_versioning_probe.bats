@@ -11,9 +11,7 @@ prepare_checkout() {
   git -C "$repository" config user.name 'EMC release probe'
   git -C "$repository" config user.email 'release-probe@example.test'
   git -C "$repository" config commit.gpgsign false
-  cp "$source_repository/release-plz.toml" "$repository/release-plz.toml"
-  git -C "$repository" add release-plz.toml
-  git -C "$repository" commit -m 'test: configure release versioning probe'
+  git -C "$repository" commit --allow-empty -m 'test: configure release versioning probe'
 }
 
 run_update() {
