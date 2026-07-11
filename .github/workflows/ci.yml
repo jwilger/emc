@@ -136,6 +136,7 @@ jobs:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           RELEASE_SIGNING_KEY: op://Github Secrets/RELEASE_SIGNING_KEY/private key?ssh-format=openssh
           CARGO_REGISTRY_TOKEN: op://Github Secrets/CARGO_REGISTRY_TOKEN/credential
+          GH_RELEASE_AUTOMATION_TOKEN: op://Github Secrets/GH_RELEASE_AUTOMATION_TOKEN/credential
 
       - name: Configure signed release identity
         env:
@@ -189,7 +190,7 @@ jobs:
           steps.current_trunk.outputs.current == 'true' &&
           steps.release_update.outputs.has_release == 'true'
         env:
-          GIT_TOKEN: ${{ github.token }}
+          GIT_TOKEN: ${{ steps.load_secrets.outputs.GH_RELEASE_AUTOMATION_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ steps.load_secrets.outputs.CARGO_REGISTRY_TOKEN }}
           RELEASE_PLZ_CONFIG: ${{ runner.temp }}/release-plz.toml
         run: nix develop --command release-plz release --config "$RELEASE_PLZ_CONFIG"
