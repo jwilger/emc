@@ -7,6 +7,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.13](https://github.com/jwilger/emc/compare/v0.1.12...v0.1.13) - 2026-07-11
+
+### Fixed
+
+- recalculate failed trunk release
+- retain release configuration during recovery
+- recover pending green-trunk releases
+- enable release-plz Git releases
+- close Tiber tasks from local hooks
+
+### Other
+
+- keep lint preflight fast
+- fetch release probe baseline tag
+- gate long checks on lint
+- preserve published baseline in release probe
+- *(release)* v0.1.13
+- run release versioning probe in CI
+- publish releases from green trunk
+- adopt direct trunk development workflow ([#11](https://github.com/jwilger/emc/pull/11))
+
 ## [0.1.12](https://github.com/jwilger/emc/compare/v0.1.11...v0.1.12) - 2026-07-05
 
 ### Other
