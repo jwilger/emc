@@ -93,6 +93,19 @@ SCRIPT
   grep -Fqx 'update --verbose' "$command_log"
 }
 
+@test "release update uses the supplied validated configuration" {
+  config="$BATS_TEST_TMPDIR/release-plz.toml"
+  : >"$config"
+
+  run env RELEASE_PLZ_CONFIG="$config" RELEASE_PLZ_RESULT=semver \
+    RELEASE_PLZ_LOG="$command_log" PATH="$mock_bin:$PATH" \
+    sh -c 'cd "$1" && shift && exec "$@"' sh "$repository" \
+    "$BATS_TEST_DIRNAME/../scripts/release-green-trunk-update.sh"
+
+  [ "$status" -eq 0 ]
+  grep -Fqx "update --verbose --config $config" "$command_log"
+}
+
 @test "release update accepts a successfully loaded semver baseline" {
   run env RELEASE_PLZ_RESULT=baseline-success RELEASE_PLZ_LOG="$command_log" PATH="$mock_bin:$PATH" \
     sh -c 'cd "$1" && shift && exec "$@"' sh "$repository" \

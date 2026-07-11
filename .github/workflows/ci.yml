@@ -147,11 +147,14 @@ jobs:
       - name: Confirm this run still tests current trunk
         id: current_trunk
         run: |
+          cp release-plz.toml "$RUNNER_TEMP/release-plz.toml"
           git fetch origin main
           ./scripts/select-release-trunk.sh
 
       - name: Calculate release update with SemVer evidence
         if: steps.current_trunk.outputs.current == 'true'
+        env:
+          RELEASE_PLZ_CONFIG: ${{ runner.temp }}/release-plz.toml
         run: nix develop --command ./scripts/release-green-trunk-update.sh
 
       - name: Commit the generated release update
@@ -180,7 +183,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           CARGO_REGISTRY_TOKEN: ${{ steps.load_secrets.outputs.CARGO_REGISTRY_TOKEN }}
-        run: nix develop --command release-plz release
+          RELEASE_PLZ_CONFIG: ${{ runner.temp }}/release-plz.toml
+        run: nix develop --command release-plz release --config "$RELEASE_PLZ_CONFIG"
 
       - name: Synchronize released public issues
         if: >-

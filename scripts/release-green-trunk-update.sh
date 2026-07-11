@@ -6,7 +6,17 @@ set -eu
 output=$(mktemp)
 trap 'rm -f "$output"' 0
 
-if ! release-plz update --verbose >"$output" 2>&1; then
+if [ -n "${RELEASE_PLZ_CONFIG:-}" ]; then
+  update_release_plz() {
+    release-plz update --verbose --config "$RELEASE_PLZ_CONFIG"
+  }
+else
+  update_release_plz() {
+    release-plz update --verbose
+  }
+fi
+
+if ! update_release_plz >"$output" 2>&1; then
   cat "$output" >&2
   echo 'release-plz update failed; refusing to publish' >&2
   exit 1
