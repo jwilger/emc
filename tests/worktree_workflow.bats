@@ -11,7 +11,7 @@ setup() {
   git -C "$project" config user.name "EMC test"
   git -C "$project" config user.email "emc@example.test"
   git -C "$project" config commit.gpgsign false
-  printf '.envrc\ntarget\n.worktrees/\n' >"$project/.gitignore"
+  cp "$BATS_TEST_DIRNAME/../.gitignore" "$project/.gitignore"
   printf 'LOCAL_ONLY=1\n' >"$project/.envrc"
   printf 'seed\n' >"$project/README.md"
   git -C "$project" add .githooks .gitignore README.md scripts
@@ -30,6 +30,7 @@ setup() {
   [ "$(readlink "$project/.worktrees/feature-one/.envrc")" = "$project/.envrc" ]
   [ -L "$project/.worktrees/feature-one/target" ]
   [ "$(readlink "$project/.worktrees/feature-one/target")" = "$project/target" ]
+  [ -z "$(git -C "$project/.worktrees/feature-one" status --porcelain)" ]
 }
 
 @test "main checkout guard rejects commits while a linked worktree permits them" {

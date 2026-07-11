@@ -11,7 +11,7 @@
 /.worktrees/
 
 # Rust build outputs
-/target/
+/target
 /.build/
 
 # Nix build links

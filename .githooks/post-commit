@@ -3,6 +3,11 @@
 
 set -eu
 
+PATH="$HOME/.local/bin:$PATH"
+export PATH
+SSH_AUTH_SOCK="$HOME/.1password/agent.sock"
+export SSH_AUTH_SOCK
+
 if command -v tiber >/dev/null 2>&1; then
   "$(git rev-parse --show-toplevel)/.githooks/post-commit.tiber"
 fi
