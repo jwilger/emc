@@ -13,6 +13,8 @@ pr_mr_status:
 
 ## Acceptance criteria
 
+- [ ] check is validation-only and sync explicitly restores missing, corrupt, or drifted artifacts through CLI and MCP.
+
 ## Subtasks
 
 ## Notes / Log
