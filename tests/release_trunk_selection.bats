@@ -39,6 +39,7 @@ create_release_commit() {
 
   [ "$status" -eq 0 ]
   grep -Fqx 'current=true' "$output_file"
+  grep -Fqx 'recovery=true' "$output_file"
   [ "$(git -C "$repository" rev-parse HEAD)" = "$release_revision" ]
   [ "$(git -C "$repository" symbolic-ref --short HEAD)" = 'release-plz-pending' ]
   [ "$(git -C "$repository" rev-parse --abbrev-ref '@{upstream}')" = 'origin/main' ]
@@ -53,6 +54,7 @@ create_release_commit() {
 
   [ "$status" -eq 0 ]
   grep -Fqx 'current=true' "$output_file"
+  grep -Fqx 'recovery=false' "$output_file"
   [ "$(git -C "$repository" rev-parse HEAD)" = "$event_revision" ]
 }
 
@@ -88,7 +90,27 @@ create_release_commit() {
 
   [ "$status" -eq 0 ]
   grep -Fqx 'current=true' "$output_file"
+  grep -Fqx 'recovery=true' "$output_file"
   [ "$(git -C "$repository" rev-parse HEAD)" = "$release_revision" ]
+}
+
+@test "the latest compatible generated release is resumed" {
+  create_release_commit
+  git -C "$repository" checkout --detach "$release_revision"
+  printf 'refreshed changelog\n' >>"$repository/README.md"
+  git -C "$repository" add README.md
+  git -C "$repository" commit -m 'chore(release): v0.1.13'
+  latest_release_revision="$(git -C "$repository" rev-parse HEAD)"
+  git -C "$repository" update-ref refs/remotes/origin/main "$latest_release_revision"
+  git -C "$repository" checkout --detach "$event_revision"
+
+  run env GITHUB_OUTPUT="$output_file" \
+    sh -c 'cd "$1" && shift && exec "$@"' sh "$repository" \
+    "$BATS_TEST_DIRNAME/../scripts/select-release-trunk.sh"
+
+  [ "$status" -eq 0 ]
+  grep -Fqx 'recovery=true' "$output_file"
+  [ "$(git -C "$repository" rev-parse HEAD)" = "$latest_release_revision" ]
 }
 
 @test "a reverted pending release leaves current trunk selected for recalculation" {
@@ -106,5 +128,6 @@ create_release_commit() {
 
   [ "$status" -eq 0 ]
   grep -Fqx 'current=true' "$output_file"
+  grep -Fqx 'recovery=false' "$output_file"
   [ "$(git -C "$repository" rev-parse HEAD)" = "$reverted_revision" ]
 }
