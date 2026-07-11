@@ -191,9 +191,13 @@ jobs:
           steps.release_update.outputs.has_release == 'true'
         env:
           GIT_TOKEN: ${{ steps.load_secrets.outputs.GH_RELEASE_AUTOMATION_TOKEN }}
+          GH_TOKEN: ${{ steps.load_secrets.outputs.GH_RELEASE_AUTOMATION_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ steps.load_secrets.outputs.CARGO_REGISTRY_TOKEN }}
           RELEASE_PLZ_CONFIG: ${{ runner.temp }}/release-plz.toml
-        run: nix develop --command release-plz release --config "$RELEASE_PLZ_CONFIG"
+        run: |
+          nix develop --command release-plz release --config "$RELEASE_PLZ_CONFIG"
+          ./scripts/complete-published-release.sh \
+            "${{ steps.release_update.outputs.version }}"
 
       - name: Synchronize released public issues
         if: >-
