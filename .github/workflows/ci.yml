@@ -151,6 +151,8 @@ jobs:
           cp release-plz.toml "$RUNNER_TEMP/release-plz.toml"
           cp scripts/release-green-trunk-update.sh \
             "$RUNNER_TEMP/release-green-trunk-update.sh"
+          cp scripts/complete-published-release.sh \
+            "$RUNNER_TEMP/complete-published-release.sh"
           git fetch origin main
           ./scripts/select-release-trunk.sh
 
@@ -196,7 +198,7 @@ jobs:
           RELEASE_PLZ_CONFIG: ${{ runner.temp }}/release-plz.toml
         run: |
           nix develop --command release-plz release --config "$RELEASE_PLZ_CONFIG"
-          ./scripts/complete-published-release.sh \
+          "$RUNNER_TEMP/complete-published-release.sh" \
             "${{ steps.release_update.outputs.version }}"
 
       - name: Synchronize released public issues
