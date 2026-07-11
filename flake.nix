@@ -225,6 +225,7 @@
             cargo-mutants
             cargo-nextest
             cargo-watch
+            bats
             forgejo-mcp
             jq
             just

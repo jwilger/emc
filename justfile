@@ -28,3 +28,12 @@ mutants-core:
 
 mutants-full:
 	cargo mutants --cap-lints true
+
+show-tasks:
+	tiber list
+
+worktree-create name:
+	{{justfile_directory()}}/scripts/worktree-create.sh "{{name}}"
+
+worktree-remove name:
+	{{justfile_directory()}}/scripts/worktree-remove.sh "{{name}}"

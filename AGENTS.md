@@ -21,22 +21,25 @@ boundary, keep those types through internal logic, and serialize primitives only
 when writing external formats such as JSON event files, process arguments, file
 contents, or command output.
 
-Work one major change at a time. Do not start another major task while a PR for
-the current task is still waiting on CI, review, approval, merge, or local
-cleanup.
+Tiber is the authoritative accepted-work backlog. GitHub Issues are public
+triage inputs and release-notification records; do not begin implementation
+until an issue is associated with an accepted Tiber task. Work one major Tiber
+task at a time, and move it to `in-progress` before changing code. Do not begin
+another task until the current task is closed and its local worktree is cleaned
+up.
 
 For long-running architectural goals, keep the main agent focused on
-integration, review, PR ownership, CI, and merge cleanup. Use subagents only for
-bounded work that can run in parallel without blocking the next local step:
-specific codebase scouting questions, disjoint implementation slices with
-explicit file ownership, or focused verification. Do not use subagents by
-default. First prefer deterministic shell facts such as `rg`, `git diff`,
-generated artifact inspection, and focused test output. Use a subagent only when
-the delegated task is likely to consume fewer main-thread tokens than local
-inspection, usually no more than one scout subagent per increment. Prefer the
-smallest available capable model for scout-style subagents, and do not use
-subagents for overlapping shared-type refactors, PR merge/review handling, broad
-architecture surveys, or work that requires immediate main-thread decisions.
+integration, review, CI, and cleanup. Use subagents only for bounded work that
+can run in parallel without blocking the next local step: specific codebase
+scouting questions, disjoint implementation slices with explicit file ownership,
+or focused verification. Do not use subagents by default. First prefer
+deterministic shell facts such as `rg`, `git diff`, generated artifact
+inspection, and focused test output. Use a subagent only when the delegated task
+is likely to consume fewer main-thread tokens than local inspection, usually no
+more than one scout subagent per increment. Prefer the smallest available capable
+model for scout-style subagents, and do not use subagents for overlapping
+shared-type refactors, broad architecture surveys, or work that requires
+immediate main-thread decisions.
 
 For token efficiency on long-running goals, keep a short progress ledger in the
 repository when the work spans multiple PRs. The ledger should record completed
@@ -57,30 +60,24 @@ the worktree automatically, or duplicate Forgejo CI. Do not add hooks that
 enforce maintainer guidance by matching strings in documentation or source
 files.
 
-Before pushing to a PR branch, run focused local verification appropriate to
-the files changed. Do not run local `just ci` solely as a pre-push ritual;
-Forgejo CI is the full PR gate. If local `just ci` is run and returns green,
-commit the current green state and push it.
+Direct signed trunk development is the normal workflow for write collaborators.
+Create each increment with `just worktree-create <name>` from the primary
+checkout and do all changes in that linked worktree. The primary checkout guard
+blocks commits and pushes. `just worktree-remove <name>` removes the linked
+checkout after the task is complete; delete its merged branch separately.
 
-The repository requires pull requests; do not push directly to `main`. Push a
-feature branch, open a PR, and use conventional commits format for the PR title
-and description just as for commit messages.
+Run focused local gates before committing. Use a signed conventional commit and
+include `Closes: <tiber-task-ref>` when the commit completes that task. Push a
+green increment immediately from its linked worktree with `git push origin
+HEAD:main`. Monitor the resulting trunk CI run. A failed trunk run is
+stop-the-line: inspect it, make the smallest repair in a new linked worktree,
+and do not start other work until trunk is green again.
 
-Do not start Forgejo PR bodies by repeating the conventional commit title. PR
-bodies should start with useful sections such as Summary, Rationale, and
-Verification.
-
-After opening a PR, monitor CI and review feedback. If CI fails, inspect the
-failing job logs, make the smallest appropriate fix, rerun relevant local
-verification, commit, and push back to the same branch. Address all review
-feedback from auto_review in the same way. All review comments must be handled
-before merging, including non-blocking warnings on approved reviews. Do not
-merge until CI is green, every review comment has been addressed or explicitly
-resolved, and `@auto-review` has approved the PR.
-
-Once approval is in place, merge the PR before starting any new task. After the
-merge, clean up the merged local and remote feature branch, switch back to
-`main`, and refresh local `main` from `origin/main`.
+Contributors without write access use maintainer-approved external pull requests.
+Keep external PRs squash-only and delete their merged branches. The installed
+Codex plugins for engineering standards, development discipline, worktrees,
+Tiber, advisor, and PR babysitting are the repository's preferred workflow
+tools; use the relevant plugin when its task matches.
 
 Keep `docs/event-model/formal-modeling-rules.md` status markers current when
 changing the formal metamodel, generators, or verification workflow. Use `✅`
