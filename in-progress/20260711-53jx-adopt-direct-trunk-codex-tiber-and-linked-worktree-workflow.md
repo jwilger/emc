@@ -5,6 +5,9 @@ blocks: [20260711-tewn-publish-green-trunk-releases-with-release-plz-and-cargo-s
 tags: []
 pr_mr_url: 
 pr_mr_status: 
+claim:
+  host: unknown
+  session: unknown
 ---
 
 ## Summary
