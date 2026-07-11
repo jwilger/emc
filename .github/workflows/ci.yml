@@ -148,6 +148,8 @@ jobs:
         id: current_trunk
         run: |
           cp release-plz.toml "$RUNNER_TEMP/release-plz.toml"
+          cp scripts/release-green-trunk-update.sh \
+            "$RUNNER_TEMP/release-green-trunk-update.sh"
           git fetch origin main
           ./scripts/select-release-trunk.sh
 
@@ -155,7 +157,9 @@ jobs:
         if: steps.current_trunk.outputs.current == 'true'
         env:
           RELEASE_PLZ_CONFIG: ${{ runner.temp }}/release-plz.toml
-        run: nix develop --command ./scripts/release-green-trunk-update.sh
+        run: >-
+          nix develop --command
+          ${{ runner.temp }}/release-green-trunk-update.sh
 
       - name: Commit the generated release update
         id: release_update

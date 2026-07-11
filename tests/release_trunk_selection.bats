@@ -8,15 +8,22 @@ setup() {
   git -C "$repository" config user.name 'EMC test'
   git -C "$repository" config user.email 'emc@example.test'
   git -C "$repository" config commit.gpgsign false
+  git -C "$repository" remote add origin "$repository"
   printf 'seed\n' >"$repository/README.md"
-  git -C "$repository" add README.md
+  cat >"$repository/Cargo.toml" <<'TOML'
+[package]
+name = "emc"
+version = "0.1.12"
+TOML
+  git -C "$repository" add README.md Cargo.toml
   git -C "$repository" commit -m 'test: seed trunk'
   event_revision="$(git -C "$repository" rev-parse HEAD)"
 }
 
 create_release_commit() {
   printf 'release\n' >>"$repository/README.md"
-  git -C "$repository" add README.md
+  sed -i 's/version = "0.1.12"/version = "0.1.13"/' "$repository/Cargo.toml"
+  git -C "$repository" add README.md Cargo.toml
   git -C "$repository" commit -m 'chore(release): v0.1.13'
   release_revision="$(git -C "$repository" rev-parse HEAD)"
   git -C "$repository" update-ref refs/remotes/origin/main "$release_revision"
@@ -33,6 +40,8 @@ create_release_commit() {
   [ "$status" -eq 0 ]
   grep -Fqx 'current=true' "$output_file"
   [ "$(git -C "$repository" rev-parse HEAD)" = "$release_revision" ]
+  [ "$(git -C "$repository" symbolic-ref --short HEAD)" = 'release-plz-pending' ]
+  [ "$(git -C "$repository" rev-parse --abbrev-ref '@{upstream}')" = 'origin/main' ]
 }
 
 @test "the current trunk revision is retained" {
@@ -80,4 +89,22 @@ create_release_commit() {
   [ "$status" -eq 0 ]
   grep -Fqx 'current=true' "$output_file"
   [ "$(git -C "$repository" rev-parse HEAD)" = "$release_revision" ]
+}
+
+@test "a reverted pending release leaves current trunk selected for recalculation" {
+  create_release_commit
+  git -C "$repository" checkout --detach "$release_revision"
+  sed -i 's/version = "0.1.13"/version = "0.1.12"/' "$repository/Cargo.toml"
+  git -C "$repository" add Cargo.toml
+  git -C "$repository" commit -m 'revert: failed release version bump'
+  reverted_revision="$(git -C "$repository" rev-parse HEAD)"
+  git -C "$repository" update-ref refs/remotes/origin/main "$reverted_revision"
+
+  run env GITHUB_OUTPUT="$output_file" \
+    sh -c 'cd "$1" && shift && exec "$@"' sh "$repository" \
+    "$BATS_TEST_DIRNAME/../scripts/select-release-trunk.sh"
+
+  [ "$status" -eq 0 ]
+  grep -Fqx 'current=true' "$output_file"
+  [ "$(git -C "$repository" rev-parse HEAD)" = "$reverted_revision" ]
 }
