@@ -21,3 +21,5 @@ claim:
 ## Subtasks
 
 ## Notes / Log
+
+- 2026-07-11: Initialized the signed tasks branch, installed the Tiber scaffold, and implemented worktree lifecycle commands with behavior tests.
