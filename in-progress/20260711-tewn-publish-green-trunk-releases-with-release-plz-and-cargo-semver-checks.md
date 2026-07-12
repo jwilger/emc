@@ -16,7 +16,7 @@ claim:
 
 ## Acceptance criteria
 
-- [ ] Green trunk publishes through release-plz with mandatory cargo-semver-checks evidence and release-gated issue synchronization.
+- [x] Green trunk publishes through release-plz with mandatory cargo-semver-checks evidence and release-gated issue synchronization.
 
 ## Subtasks
 
