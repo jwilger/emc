@@ -17,6 +17,8 @@ The current trunk test suite takes roughly 20 minutes. Investigate safe parallel
 
 ## Acceptance criteria
 
+- [ ] Benchmark the current critical path and identify the dominant test or setup costs.
+
 ## Subtasks
 
 ## Notes / Log
