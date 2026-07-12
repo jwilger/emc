@@ -17,6 +17,8 @@ GitHub Actions run 29195216187 passed lint, release versioning, and Nix flake ch
 
 ## Acceptance criteria
 
+- [ ] `emc check` rebuilds missing project, generated-model, and review artifacts from a populated event store and succeeds.
+
 ## Subtasks
 
 ## Notes / Log
