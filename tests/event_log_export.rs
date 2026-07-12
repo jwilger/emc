@@ -4,11 +4,13 @@
 mod tests {
     use std::error::Error;
     use std::fs;
+    use std::io;
+    use std::path::{Path, PathBuf};
     use std::process::Command as ProcessCommand;
 
     use assert_cmd::Command;
     use assert_cmd::cargo::cargo_bin;
-    use predicates::str::contains;
+    use predicates::str::{contains, starts_with};
     use tempfile::TempDir;
 
     #[test]
@@ -36,7 +38,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_slice_scenarios_from_exported_events() -> Result<(), Box<dyn Error>> {
+    fn sync_rebuilds_slice_scenarios_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -66,7 +68,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -90,7 +92,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_contract_scenario_updates_from_exported_events() -> Result<(), Box<dyn Error>>
+    fn sync_rebuilds_contract_scenario_updates_from_exported_events() -> Result<(), Box<dyn Error>>
     {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
@@ -128,7 +130,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -148,7 +150,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_contract_scenario_removals_from_exported_events() -> Result<(), Box<dyn Error>>
+    fn sync_rebuilds_contract_scenario_removals_from_exported_events() -> Result<(), Box<dyn Error>>
     {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
@@ -172,7 +174,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -192,7 +194,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_slice_outcomes_from_exported_events() -> Result<(), Box<dyn Error>> {
+    fn sync_rebuilds_slice_outcomes_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -218,7 +220,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -242,7 +244,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_external_payloads_from_exported_events() -> Result<(), Box<dyn Error>> {
+    fn sync_rebuilds_external_payloads_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -270,7 +272,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -294,7 +296,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_slice_event_definitions_from_exported_events() -> Result<(), Box<dyn Error>> {
+    fn sync_rebuilds_slice_event_definitions_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -332,7 +334,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -356,7 +358,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_slice_command_definitions_from_exported_events() -> Result<(), Box<dyn Error>>
+    fn sync_rebuilds_slice_command_definitions_from_exported_events() -> Result<(), Box<dyn Error>>
     {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
@@ -389,7 +391,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -413,7 +415,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_slice_read_models_from_exported_events() -> Result<(), Box<dyn Error>> {
+    fn sync_rebuilds_slice_read_models_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -445,7 +447,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -469,7 +471,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_slice_bit_level_data_flows_from_exported_events() -> Result<(), Box<dyn Error>>
+    fn sync_rebuilds_slice_bit_level_data_flows_from_exported_events() -> Result<(), Box<dyn Error>>
     {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
@@ -502,7 +504,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -526,7 +528,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_slice_bit_level_data_flow_updates_from_exported_events()
+    fn sync_rebuilds_slice_bit_level_data_flow_updates_from_exported_events()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
@@ -573,7 +575,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -593,7 +595,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_slice_bit_level_data_flow_removals_from_exported_events()
+    fn sync_rebuilds_slice_bit_level_data_flow_removals_from_exported_events()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
@@ -628,7 +630,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -644,7 +646,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_slice_automations_from_exported_events() -> Result<(), Box<dyn Error>> {
+    fn sync_rebuilds_slice_automations_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -674,7 +676,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -698,7 +700,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_slice_board_elements_from_exported_events() -> Result<(), Box<dyn Error>> {
+    fn sync_rebuilds_slice_board_elements_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -728,7 +730,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -752,7 +754,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_slice_board_connections_from_exported_events() -> Result<(), Box<dyn Error>> {
+    fn sync_rebuilds_slice_board_connections_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -780,7 +782,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -804,7 +806,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_workflow_outcomes_from_exported_events() -> Result<(), Box<dyn Error>> {
+    fn sync_rebuilds_workflow_outcomes_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -830,7 +832,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -852,8 +854,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_workflow_outcome_updates_from_exported_events() -> Result<(), Box<dyn Error>>
-    {
+    fn sync_rebuilds_workflow_outcome_updates_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
         add_ticket_captured_workflow_outcome(&temp_dir)?;
@@ -886,7 +887,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -908,7 +909,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_workflow_outcome_removals_from_exported_events() -> Result<(), Box<dyn Error>>
+    fn sync_rebuilds_workflow_outcome_removals_from_exported_events() -> Result<(), Box<dyn Error>>
     {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
@@ -936,7 +937,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -952,7 +953,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_workflow_command_errors_from_exported_events() -> Result<(), Box<dyn Error>> {
+    fn sync_rebuilds_workflow_command_errors_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -978,7 +979,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -1000,7 +1001,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_workflow_command_error_updates_from_exported_events()
+    fn sync_rebuilds_workflow_command_error_updates_from_exported_events()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
@@ -1034,7 +1035,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -1056,7 +1057,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_workflow_command_error_removals_from_exported_events()
+    fn sync_rebuilds_workflow_command_error_removals_from_exported_events()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
@@ -1084,7 +1085,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -1100,7 +1101,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_workflow_owned_definitions_from_exported_events() -> Result<(), Box<dyn Error>>
+    fn sync_rebuilds_workflow_owned_definitions_from_exported_events() -> Result<(), Box<dyn Error>>
     {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
@@ -1127,7 +1128,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -1149,7 +1150,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_updated_workflow_owned_definitions_from_exported_events()
+    fn sync_rebuilds_updated_workflow_owned_definitions_from_exported_events()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
@@ -1199,7 +1200,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -1220,7 +1221,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_removed_workflow_owned_definitions_from_exported_events()
+    fn sync_rebuilds_removed_workflow_owned_definitions_from_exported_events()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
@@ -1264,7 +1265,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -1281,7 +1282,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_workflow_transition_evidence_from_exported_events()
+    fn sync_rebuilds_workflow_transition_evidence_from_exported_events()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
@@ -1337,7 +1338,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -1359,7 +1360,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_updated_workflow_transition_evidence_from_exported_events()
+    fn sync_rebuilds_updated_workflow_transition_evidence_from_exported_events()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_review_slice(&temp_dir)?;
@@ -1413,7 +1414,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -1435,7 +1436,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_removed_workflow_transition_evidence_from_exported_events()
+    fn sync_rebuilds_removed_workflow_transition_evidence_from_exported_events()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_review_slice(&temp_dir)?;
@@ -1473,7 +1474,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -1490,8 +1491,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_workflow_entry_lifecycle_from_exported_events() -> Result<(), Box<dyn Error>>
-    {
+    fn sync_rebuilds_workflow_entry_lifecycle_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -1528,7 +1528,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -1549,7 +1549,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_updated_workflow_entry_lifecycle_from_exported_events()
+    fn sync_rebuilds_updated_workflow_entry_lifecycle_from_exported_events()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
@@ -1595,7 +1595,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -1616,7 +1616,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_removed_workflow_entry_lifecycle_from_exported_events()
+    fn sync_rebuilds_removed_workflow_entry_lifecycle_from_exported_events()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
@@ -1667,7 +1667,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -1688,7 +1688,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_workflow_connections_from_exported_events() -> Result<(), Box<dyn Error>> {
+    fn sync_rebuilds_workflow_connections_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -1739,7 +1739,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -1761,7 +1761,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_workflow_transition_removals_from_exported_events()
+    fn sync_rebuilds_workflow_transition_removals_from_exported_events()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
@@ -1855,7 +1855,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -1874,8 +1874,8 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_workflow_transition_updates_from_exported_events()
-    -> Result<(), Box<dyn Error>> {
+    fn sync_rebuilds_workflow_transition_updates_from_exported_events() -> Result<(), Box<dyn Error>>
+    {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -1957,7 +1957,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -1986,7 +1986,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_slice_views_from_exported_events() -> Result<(), Box<dyn Error>> {
+    fn sync_rebuilds_slice_views_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -2020,7 +2020,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -2044,7 +2044,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_slice_translations_from_exported_events() -> Result<(), Box<dyn Error>> {
+    fn sync_rebuilds_slice_translations_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -2072,7 +2072,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -2096,7 +2096,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_generated_artifacts_from_exported_events() -> Result<(), Box<dyn Error>> {
+    fn sync_rebuilds_generated_artifacts_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -2105,7 +2105,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -2134,7 +2134,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_slice_updates_from_exported_events() -> Result<(), Box<dyn Error>> {
+    fn sync_rebuilds_slice_updates_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -2180,7 +2180,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -2215,7 +2215,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_slice_removal_from_exported_events() -> Result<(), Box<dyn Error>> {
+    fn sync_rebuilds_slice_removal_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -2230,7 +2230,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -2340,7 +2340,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_workflow_updates_from_exported_events() -> Result<(), Box<dyn Error>> {
+    fn sync_rebuilds_workflow_updates_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -2374,7 +2374,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -2401,7 +2401,7 @@ mod tests {
     }
 
     #[test]
-    fn check_rebuilds_workflow_removal_from_exported_events() -> Result<(), Box<dyn Error>> {
+    fn sync_rebuilds_workflow_removal_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -2416,7 +2416,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -2542,7 +2542,7 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .failure()
-            .stderr(contains(
+            .stderr(starts_with(
                 "pre-release upgrade required: generated artifacts exist without a populated event store at model/events",
             ));
 
@@ -2550,7 +2550,7 @@ mod tests {
     }
 
     #[test]
-    fn check_records_projection_fingerprint_when_rebuilding_from_events()
+    fn sync_records_projection_fingerprint_when_rebuilding_from_events()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
@@ -2560,7 +2560,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -2576,7 +2576,8 @@ mod tests {
     }
 
     #[test]
-    fn check_projects_new_event_files_when_artifacts_already_exist() -> Result<(), Box<dyn Error>> {
+    fn add_projects_new_event_files_and_check_leaves_them_unchanged() -> Result<(), Box<dyn Error>>
+    {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -2599,27 +2600,35 @@ mod tests {
             .assert()
             .success();
 
-        Command::cargo_bin("emc")?
-            .args(["check"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
+        let lean_slice_path = temp_dir
+            .path()
+            .join("model/lean/slices/ClassifyTicket.lean");
+        let projected_slice = fs::read_to_string(&lean_slice_path)?;
         assert!(
-            fs::read_to_string(
-                temp_dir
-                    .path()
-                    .join("model/lean/slices/ClassifyTicket.lean")
-            )?
-            .contains("def sliceName := \"Classify ticket\""),
-            "runtime entrypoints must project newly added slices even when generated artifacts already exist"
+            projected_slice.contains("def sliceName := \"Classify ticket\""),
+            "add slice must project newly appended events when generated artifacts already exist"
+        );
+
+        let check = {
+            let _read_only_project = ReadOnlyProject::new(temp_dir.path())?;
+            Command::cargo_bin("emc")?
+                .args(["check"])
+                .current_dir(temp_dir.path())
+                .assert()
+        };
+        check.success();
+
+        assert_eq!(
+            fs::read_to_string(lean_slice_path)?,
+            projected_slice,
+            "check must validate the projected slice without rewriting it"
         );
 
         Ok(())
     }
 
     #[test]
-    fn check_rebuilds_clean_review_records_from_exported_events() -> Result<(), Box<dyn Error>> {
+    fn sync_rebuilds_clean_review_records_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -2644,7 +2653,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("reviews"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -2664,11 +2673,20 @@ mod tests {
             "projected review record must preserve clean status"
         );
 
+        let check = {
+            let _read_only_project = ReadOnlyProject::new(temp_dir.path())?;
+            Command::cargo_bin("emc")?
+                .args(["check"])
+                .current_dir(temp_dir.path())
+                .assert()
+        };
+        check.success();
+
         Ok(())
     }
 
     #[test]
-    fn check_rebuilds_missing_reviews_from_exported_events() -> Result<(), Box<dyn Error>> {
+    fn sync_rebuilds_missing_reviews_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
 
@@ -2690,7 +2708,7 @@ mod tests {
         fs::remove_dir_all(temp_dir.path().join("reviews"))?;
 
         Command::cargo_bin("emc")?
-            .args(["check"])
+            .args(["sync"])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -2922,6 +2940,63 @@ mod tests {
             .assert()
             .success();
 
+        Ok(())
+    }
+
+    struct ReadOnlyProject {
+        original_permissions: Vec<(PathBuf, fs::Permissions)>,
+    }
+
+    impl ReadOnlyProject {
+        fn new(root: &Path) -> Result<Self, Box<dyn Error>> {
+            let mut paths = Vec::new();
+            let operational_locks = root.join("model/events/locks");
+            let event_store_lock = root.join("model/events/.lock");
+            collect_project_paths(root, &operational_locks, &event_store_lock, &mut paths)?;
+            let original_permissions = paths
+                .into_iter()
+                .map(|path| {
+                    let permissions = fs::metadata(&path)?.permissions();
+                    Ok((path, permissions))
+                })
+                .collect::<Result<Vec<_>, io::Error>>()?;
+            let project = Self {
+                original_permissions,
+            };
+
+            for (path, permissions) in project.original_permissions.iter().rev() {
+                let mut read_only_permissions = permissions.clone();
+                read_only_permissions.set_readonly(true);
+                fs::set_permissions(path, read_only_permissions)?;
+            }
+
+            Ok(project)
+        }
+    }
+
+    impl Drop for ReadOnlyProject {
+        fn drop(&mut self) {
+            for (path, permissions) in &self.original_permissions {
+                drop(fs::set_permissions(path, permissions.clone()));
+            }
+        }
+    }
+
+    fn collect_project_paths(
+        path: &Path,
+        writable_subtree: &Path,
+        writable_file: &Path,
+        collected: &mut Vec<PathBuf>,
+    ) -> Result<(), Box<dyn Error>> {
+        if path == writable_subtree || path == writable_file {
+            return Ok(());
+        }
+        collected.push(path.to_path_buf());
+        if path.is_dir() {
+            for entry in fs::read_dir(path)? {
+                collect_project_paths(&entry?.path(), writable_subtree, writable_file, collected)?;
+            }
+        }
         Ok(())
     }
 
