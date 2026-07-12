@@ -12,5 +12,6 @@ if ! git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1;
 fi
 
 if ! gh release view "$tag" >/dev/null 2>&1; then
-  gh release create "$tag" --target HEAD --title "$tag" --generate-notes
+  release_commit="$(git rev-parse "${tag}^{}")"
+  gh release create "$tag" --target "$release_commit" --title "$tag" --generate-notes
 fi

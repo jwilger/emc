@@ -16,6 +16,9 @@ case "$1" in
   tag|push)
     exit 0
     ;;
+  rev-parse)
+    printf '%s\n' release-commit
+    ;;
   *)
     echo "unexpected git command: $*" >&2
     exit 1
@@ -48,7 +51,7 @@ SCRIPT
 
   [ "$status" -eq 0 ]
   run cat "$command_log"
-  [ "$output" = $'git ls-remote --exit-code --tags origin refs/tags/v0.1.13\ngit tag -s v0.1.13 -m v0.1.13 HEAD\ngit push origin refs/tags/v0.1.13\ngh release view v0.1.13\ngh release create v0.1.13 --target HEAD --title v0.1.13 --generate-notes' ]
+  [ "$output" = $'git ls-remote --exit-code --tags origin refs/tags/v0.1.13\ngit tag -s v0.1.13 -m v0.1.13 HEAD\ngit push origin refs/tags/v0.1.13\ngh release view v0.1.13\ngit rev-parse v0.1.13^{}\ngh release create v0.1.13 --target release-commit --title v0.1.13 --generate-notes' ]
 }
 
 @test "an existing tag and release are left untouched on rerun" {
@@ -68,5 +71,5 @@ SCRIPT
 
   [ "$status" -eq 0 ]
   run cat "$command_log"
-  [ "$output" = $'git ls-remote --exit-code --tags origin refs/tags/v0.1.13\ngh release view v0.1.13\ngh release create v0.1.13 --target HEAD --title v0.1.13 --generate-notes' ]
+  [ "$output" = $'git ls-remote --exit-code --tags origin refs/tags/v0.1.13\ngh release view v0.1.13\ngit rev-parse v0.1.13^{}\ngh release create v0.1.13 --target release-commit --title v0.1.13 --generate-notes' ]
 }
