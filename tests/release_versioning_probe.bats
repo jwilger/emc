@@ -54,9 +54,9 @@ package_version() {
 
 @test "release-plz selects a patch version for an internal-only fix" {
   prepare_checkout
-  printf '\nrelease versioning probe\n' >>"$repository/README.md"
-  git -C "$repository" add README.md
-  git -C "$repository" commit -m 'fix: clarify release probe documentation'
+  printf '\nconst RELEASE_VERSIONING_PROBE_INTERNAL_FIX: bool = true;\n' >>"$repository/src/lib.rs"
+  git -C "$repository" add src/lib.rs
+  git -C "$repository" commit -m 'fix: clarify release probe internals'
 
   run_update
 
