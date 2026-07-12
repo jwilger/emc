@@ -11,6 +11,9 @@ prepare_checkout() {
   git -C "$repository" config user.name 'EMC release probe'
   git -C "$repository" config user.email 'release-probe@example.test'
   git -C "$repository" config commit.gpgsign false
+  while IFS= read -r tag; do
+    [ "$tag" = 'v0.1.12' ] || git -C "$repository" tag -d "$tag"
+  done < <(git -C "$repository" tag --list)
   git -C "$repository" checkout v0.1.12 -- Cargo.toml Cargo.lock
   git -C "$repository" add Cargo.toml Cargo.lock
   git -C "$repository" commit --allow-empty -m 'test: configure release versioning probe'
