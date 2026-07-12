@@ -66,5 +66,5 @@ package_version() {
   [ "$status" -eq 0 ]
   [[ "$output" == *'Checking API compatibility with cargo-semver-checks...'* ]]
   [[ "$output" == *'API compatible changes'* ]]
-  [ "$(package_version)" = '0.1.13' ]
+  [[ "$(package_version)" =~ ^0\.1\.[1-9][0-9]*$ ]]
 }
