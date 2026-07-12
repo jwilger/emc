@@ -27,3 +27,5 @@ GitHub Actions run 29195216187 passed lint, release versioning, and Nix flake ch
 ## Subtasks
 
 ## Notes / Log
+
+- 2026-07-12: Root cause confirmed by local nextest RED and file-level syscall trace: stale `event_log_export` recovery tests still invoke validation-only `emc check` after deleting projections. Commit a8fb178 intentionally moved recovery to explicit `emc sync`; the repair must update behavioral recovery scenarios without making `check` write again.
