@@ -5,9 +5,6 @@ blocks: [20260711-6nq5-accept-and-complete-github-issue-10-explicit-projection-s
 tags: []
 pr_mr_url: 
 pr_mr_status: 
-claim:
-  host: unknown
-  session: unknown
 ---
 
 ## Summary
