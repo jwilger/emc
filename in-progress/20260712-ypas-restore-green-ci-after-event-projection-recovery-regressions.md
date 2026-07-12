@@ -21,7 +21,7 @@ GitHub Actions run 29195216187 passed lint, release versioning, and Nix flake ch
 ## Acceptance criteria
 
 - [x] Artifact-only projects without a populated event store still report the pre-release upgrade error before generated-artifact drift errors.
-- [ ] The latest commit on `origin/main` has a successful GitHub Actions CI run.
+- [x] The latest commit on `origin/main` has a successful GitHub Actions CI run.
 - [x] `emc sync` rebuilds missing project, generated-model, and review artifacts from a populated event store, after which `emc check` succeeds without writing.
 
 ## Subtasks
