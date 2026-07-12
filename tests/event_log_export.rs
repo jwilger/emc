@@ -2529,12 +2529,13 @@ mod tests {
     fn artifact_only_projects_without_event_export_report_upgrade_error()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
-        fs::write(temp_dir.path().join("emc.toml"), "name = \"Repair Desk\"\n")?;
-        fs::create_dir_all(temp_dir.path().join("model/lean"))?;
-        fs::write(
-            temp_dir.path().join("model/lean/RepairDesk.lean"),
-            "-- generated lean artifact\n",
-        )?;
+        create_project_with_workflow_and_slice(&temp_dir)?;
+        Command::cargo_bin("emc")?
+            .args(["sync"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+        fs::remove_dir_all(temp_dir.path().join("model/events"))?;
 
         Command::cargo_bin("emc")?
             .args(["check"])

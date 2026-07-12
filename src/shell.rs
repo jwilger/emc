@@ -2083,6 +2083,7 @@ fn interpret_listing_effect(effect: &Effect) -> Option<Result<Vec<String>, Shell
 }
 
 fn interpret_check_current_project() -> Result<Vec<String>, ShellError> {
+    reject_legacy_artifact_only_project().map_err(ShellError::message)?;
     let project_name = read_project_manifest_name()?;
     let formal_workflows = read_synchronized_formal_workflow_graphs()?;
     // Project-root inventories are sourced from the authoritative event
