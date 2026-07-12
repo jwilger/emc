@@ -6,19 +6,10 @@ enabled = true
 [plugins."worktrees@ai-plugins"]
 enabled = true
 
-[mcp_servers.emc]
-command = "emc"
-args = ["mcp", "stdio"]
-cwd = "/home/jwilger/projects/ai-plugins"
-startup_timeout_sec = 60
-tool_timeout_sec = 120
-enabled = true
-required = true
-
 [mcp_servers.tiber]
 command = "tiber"
 args = ["mcp", "stdio"]
-cwd = "/home/jwilger/projects/ai-plugins"
+cwd = "/home/jwilger/projects/emc"
 env_vars = ["SSH_AUTH_SOCK"]
 startup_timeout_sec = 60
 tool_timeout_sec = 120
