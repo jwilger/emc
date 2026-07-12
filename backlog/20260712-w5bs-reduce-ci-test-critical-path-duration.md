@@ -19,6 +19,7 @@ The current trunk test suite takes roughly 20 minutes. Investigate safe parallel
 
 - [ ] Benchmark the current critical path and identify the dominant test or setup costs.
 - [ ] Implement a measured reduction through safe parallelization, caching, or partitioning without reducing behavior coverage.
+- [ ] Verify the short CI gate still prevents long jobs from starting when it fails and document before/after timing evidence.
 
 ## Subtasks
 
