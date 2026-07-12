@@ -1539,8 +1539,8 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"list_workflows\",\"arguments\":{}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"show_workflow\",\"arguments\":{\"slug\":\"open-ticket\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"list_workflows\",\"arguments\":{\"project_root\":\".\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"show_workflow\",\"arguments\":{\"project_root\":\".\",\"slug\":\"open-ticket\"}}}\n",
         )
     }
 
@@ -1548,7 +1548,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"init_project\",\"arguments\":{\"name\":\"Repair Desk\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"init_project\",\"arguments\":{\"project_root\":\".\",\"name\":\"Repair Desk\"}}}\n",
         )
     }
 
@@ -1556,7 +1556,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow\",\"arguments\":{\"slug\":\"open-ticket\",\"name\":\"Open ticket\",\"description\":\"Actor opens a repair ticket.\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow\",\"arguments\":{\"project_root\":\".\",\"slug\":\"open-ticket\",\"name\":\"Open ticket\",\"description\":\"Actor opens a repair ticket.\"}}}\n",
         )
     }
 
@@ -1564,7 +1564,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"list_slices\",\"arguments\":{}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"list_slices\",\"arguments\":{\"project_root\":\".\"}}}\n",
         )
     }
 
@@ -1572,7 +1572,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"list_transitions\",\"arguments\":{}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"list_transitions\",\"arguments\":{\"project_root\":\".\"}}}\n",
         )
     }
 
@@ -1580,7 +1580,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"list_conflicts\",\"arguments\":{}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"list_conflicts\",\"arguments\":{\"project_root\":\".\"}}}\n",
         )
     }
 
@@ -1588,7 +1588,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"get_modeling_guidance\",\"arguments\":{}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"get_modeling_guidance\",\"arguments\":{\"project_root\":\".\"}}}\n",
         )
     }
 
@@ -1596,7 +1596,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_slice_scenario\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"Actor captures ticket\",\"kind\":\"acceptance\",\"given\":\"ticket intake screen is open\",\"when\":\"the actor submits corrected ticket details\",\"then\":\"the corrected details are visible for review\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_slice_scenario\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"name\":\"Actor captures ticket\",\"kind\":\"acceptance\",\"given\":\"ticket intake screen is open\",\"when\":\"the actor submits corrected ticket details\",\"then\":\"the corrected details are visible for review\"}}}\n",
         )
     }
 
@@ -1604,7 +1604,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_slice_scenario\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"Actor captures ticket\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_slice_scenario\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"name\":\"Actor captures ticket\"}}}\n",
         )
     }
 
@@ -1612,7 +1612,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_slice_scenario\",\"arguments\":{\"slice\":\"capture-ticket\",\"kind\":\"contract\",\"name\":\"Duplicate ticket is rejected\",\"given\":\"tickets stream already contains a duplicate title\",\"when\":\"CaptureTicket handles the repeated title\",\"then\":\"TicketAlreadySubmitted is returned\",\"contract_kind\":\"command\",\"covered_definition\":\"CaptureTicket\",\"error_references\":[\"TicketAlreadySubmitted\"]}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_slice_scenario\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"kind\":\"contract\",\"name\":\"Duplicate ticket is rejected\",\"given\":\"tickets stream already contains a duplicate title\",\"when\":\"CaptureTicket handles the repeated title\",\"then\":\"TicketAlreadySubmitted is returned\",\"contract_kind\":\"command\",\"covered_definition\":\"CaptureTicket\",\"error_references\":[\"TicketAlreadySubmitted\"]}}}\n",
         )
     }
 
@@ -1620,7 +1620,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_slice_scenario\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"Duplicate ticket is rejected\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_slice_scenario\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"name\":\"Duplicate ticket is rejected\"}}}\n",
         )
     }
 
@@ -1628,7 +1628,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_command_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"CaptureTicket\",\"input\":\"ticket_summary\",\"input_source\":\"actor\",\"input_description\":\"summary field on the intake form\",\"input_provenance\":\"actor keystrokes -> summary field\",\"emits\":\"TicketUpdated\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_command_definition\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"name\":\"CaptureTicket\",\"input\":\"ticket_summary\",\"input_source\":\"actor\",\"input_description\":\"summary field on the intake form\",\"input_provenance\":\"actor keystrokes -> summary field\",\"emits\":\"TicketUpdated\"}}}\n",
         )
     }
 
@@ -1636,7 +1636,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_command_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"CaptureTicket\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_command_definition\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"name\":\"CaptureTicket\"}}}\n",
         )
     }
 
@@ -1644,7 +1644,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_event_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"TicketCaptured\",\"stream\":\"ticket-updates\",\"attribute\":\"summary\",\"attribute_source\":\"generated\",\"attribute_source_name\":\"ticket_summary\",\"attribute_source_field\":\"value\",\"generated_source_kind\":\"projection\",\"attribute_provenance\":\"projection summary field\",\"observed\":true}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_event_definition\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"name\":\"TicketCaptured\",\"stream\":\"ticket-updates\",\"attribute\":\"summary\",\"attribute_source\":\"generated\",\"attribute_source_name\":\"ticket_summary\",\"attribute_source_field\":\"value\",\"generated_source_kind\":\"projection\",\"attribute_provenance\":\"projection summary field\",\"observed\":true}}}\n",
         )
     }
 
@@ -1652,7 +1652,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_event_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"TicketCaptured\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_event_definition\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"name\":\"TicketCaptured\"}}}\n",
         )
     }
 
@@ -1660,7 +1660,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_read_model_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"ticket_state\",\"field\":\"ticket_summary\",\"field_source\":\"event_attribute\",\"source_event\":\"TicketCaptured\",\"source_attribute\":\"title\",\"field_provenance\":\"TicketCaptured.title -> summary\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_read_model_definition\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"name\":\"ticket_state\",\"field\":\"ticket_summary\",\"field_source\":\"event_attribute\",\"source_event\":\"TicketCaptured\",\"source_attribute\":\"title\",\"field_provenance\":\"TicketCaptured.title -> summary\"}}}\n",
         )
     }
 
@@ -1668,7 +1668,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_read_model_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"ticket_state\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_read_model_definition\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"name\":\"ticket_state\"}}}\n",
         )
     }
 
@@ -1676,7 +1676,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_view_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"ticket_detail\",\"read_model\":\"ticket_state\",\"field\":\"ticket_summary_view\",\"source_field\":\"ticket_title\",\"sketch_token\":\"summary-label\",\"field_provenance\":\"ticket_state.ticket_title -> summary label\",\"bit_encoding\":\"UTF-8 summary string\",\"control\":\"submit-ticket\",\"control_command\":\"CaptureTicket\",\"control_input\":\"ticket_title\",\"control_input_source\":\"actor\",\"control_input_description\":\"title field on the intake form\",\"control_input_sketch_token\":\"title-input\",\"control_input_visible\":true,\"control_input_decision\":true,\"handled_errors\":\"DuplicateTicket\",\"recovery_behavior\":\"retry\",\"control_sketch_token\":\"submit-button\",\"navigation_type\":\"modeled_view\",\"navigation_target\":\"ticket_detail\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_view_definition\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"name\":\"ticket_detail\",\"read_model\":\"ticket_state\",\"field\":\"ticket_summary_view\",\"source_field\":\"ticket_title\",\"sketch_token\":\"summary-label\",\"field_provenance\":\"ticket_state.ticket_title -> summary label\",\"bit_encoding\":\"UTF-8 summary string\",\"control\":\"submit-ticket\",\"control_command\":\"CaptureTicket\",\"control_input\":\"ticket_title\",\"control_input_source\":\"actor\",\"control_input_description\":\"title field on the intake form\",\"control_input_sketch_token\":\"title-input\",\"control_input_visible\":true,\"control_input_decision\":true,\"handled_errors\":\"DuplicateTicket\",\"recovery_behavior\":\"retry\",\"control_sketch_token\":\"submit-button\",\"navigation_type\":\"modeled_view\",\"navigation_target\":\"ticket_detail\"}}}\n",
         )
     }
 
@@ -1684,7 +1684,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_view_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"ticket_detail\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_view_definition\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"name\":\"ticket_detail\"}}}\n",
         )
     }
 
@@ -1692,7 +1692,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_control_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"view\":\"ticket_detail\",\"name\":\"submit-ticket\",\"command\":\"CaptureTicket\",\"input\":\"ticket_title\",\"input_source\":\"actor\",\"input_description\":\"corrected title field on the intake form\",\"input_sketch_token\":\"corrected-title-input\",\"input_visible\":true,\"input_decision\":true,\"handled_errors\":\"DuplicateTicket\",\"recovery_behavior\":\"retry\",\"sketch_token\":\"resubmit-button\",\"navigation_type\":\"modeled_view\",\"navigation_target\":\"ticket_detail\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_control_definition\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"view\":\"ticket_detail\",\"name\":\"submit-ticket\",\"command\":\"CaptureTicket\",\"input\":\"ticket_title\",\"input_source\":\"actor\",\"input_description\":\"corrected title field on the intake form\",\"input_sketch_token\":\"corrected-title-input\",\"input_visible\":true,\"input_decision\":true,\"handled_errors\":\"DuplicateTicket\",\"recovery_behavior\":\"retry\",\"sketch_token\":\"resubmit-button\",\"navigation_type\":\"modeled_view\",\"navigation_target\":\"ticket_detail\"}}}\n",
         )
     }
 
@@ -1700,7 +1700,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_control_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"view\":\"ticket_detail\",\"name\":\"submit-ticket\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_control_definition\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"view\":\"ticket_detail\",\"name\":\"submit-ticket\"}}}\n",
         )
     }
 
@@ -1708,7 +1708,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_outcome_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"label\":\"ticket-captured\",\"events\":\"TicketRouted\",\"externally_relevant\":false}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_outcome_definition\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"label\":\"ticket-captured\",\"events\":\"TicketRouted\",\"externally_relevant\":false}}}\n",
         )
     }
 
@@ -1716,7 +1716,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_outcome_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"label\":\"ticket-captured\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_outcome_definition\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"label\":\"ticket-captured\"}}}\n",
         )
     }
 
@@ -1724,7 +1724,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_automation_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"assign-duplicate-ticket\",\"trigger\":\"DuplicateTicketEscalated\",\"command\":\"CaptureTicket\",\"handled_errors\":\"DuplicateTicket\",\"reaction\":\"escalate duplicate tickets to a human assignment queue\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_automation_definition\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"name\":\"assign-duplicate-ticket\",\"trigger\":\"DuplicateTicketEscalated\",\"command\":\"CaptureTicket\",\"handled_errors\":\"DuplicateTicket\",\"reaction\":\"escalate duplicate tickets to a human assignment queue\"}}}\n",
         )
     }
 
@@ -1732,7 +1732,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_automation_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"assign-duplicate-ticket\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_automation_definition\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"name\":\"assign-duplicate-ticket\"}}}\n",
         )
     }
 
@@ -1740,7 +1740,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_translation_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"capture-ticket-from-webhook\",\"external_event\":\"TicketWebhookRetried\",\"payload_contract\":\"TicketWebhookRetryPayload\",\"command\":\"CaptureTicket\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_translation_definition\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"name\":\"capture-ticket-from-webhook\",\"external_event\":\"TicketWebhookRetried\",\"payload_contract\":\"TicketWebhookRetryPayload\",\"command\":\"CaptureTicket\"}}}\n",
         )
     }
 
@@ -1748,7 +1748,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_translation_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"capture-ticket-from-webhook\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_translation_definition\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"name\":\"capture-ticket-from-webhook\"}}}\n",
         )
     }
 
@@ -1756,7 +1756,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_external_payload_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"TicketWebhookPayload\",\"field\":\"ticket_id\",\"field_provenance\":\"retry webhook ticket identifier\",\"bit_encoding\":\"UTF-8 retry ticket id\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_external_payload_definition\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"name\":\"TicketWebhookPayload\",\"field\":\"ticket_id\",\"field_provenance\":\"retry webhook ticket identifier\",\"bit_encoding\":\"UTF-8 retry ticket id\"}}}\n",
         )
     }
 
@@ -1764,7 +1764,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_external_payload_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"TicketWebhookPayload\",\"field\":\"ticket_id\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_external_payload_definition\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"name\":\"TicketWebhookPayload\",\"field\":\"ticket_id\"}}}\n",
         )
     }
 
@@ -1772,7 +1772,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_board_element\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"capture-ticket-command\",\"kind\":\"command\",\"lane\":\"actions\",\"declared_name\":\"Retry capture ticket\",\"main_path\":false}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_board_element\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"name\":\"capture-ticket-command\",\"kind\":\"command\",\"lane\":\"actions\",\"declared_name\":\"Retry capture ticket\",\"main_path\":false}}}\n",
         )
     }
 
@@ -1780,7 +1780,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_board_element\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"capture-ticket-command\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_board_element\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"name\":\"capture-ticket-command\"}}}\n",
         )
     }
 
@@ -1788,7 +1788,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_board_connection\",\"arguments\":{\"slice\":\"capture-ticket\",\"source\":\"actor-submit\",\"source_kind\":\"workflow_trigger\",\"target\":\"CaptureTicket\",\"target_kind\":\"command\",\"new_source\":\"ticket-form-submit\",\"new_source_kind\":\"workflow_trigger\",\"new_target\":\"CaptureTicket\",\"new_target_kind\":\"command\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_board_connection\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"source\":\"actor-submit\",\"source_kind\":\"workflow_trigger\",\"target\":\"CaptureTicket\",\"target_kind\":\"command\",\"new_source\":\"ticket-form-submit\",\"new_source_kind\":\"workflow_trigger\",\"new_target\":\"CaptureTicket\",\"new_target_kind\":\"command\"}}}\n",
         )
     }
 
@@ -1796,7 +1796,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_board_connection\",\"arguments\":{\"slice\":\"capture-ticket\",\"source\":\"TicketCaptured\",\"source_kind\":\"event\",\"target\":\"ticket_state\",\"target_kind\":\"read_model\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_board_connection\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"source\":\"TicketCaptured\",\"source_kind\":\"event\",\"target\":\"ticket_state\",\"target_kind\":\"read_model\"}}}\n",
         )
     }
 
@@ -1804,7 +1804,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"ticket_title\",\"source\":\"actor input title field\",\"source_kind\":\"original\",\"transformation\":\"identity\",\"target\":\"Capture ticket.ticket_title\",\"bit_encoding\":\"UTF-8 string\",\"new_datum\":\"ticket_title\",\"new_source\":\"reviewed title field\",\"new_source_kind\":\"modeled_target\",\"new_transformation\":\"identity\",\"new_target\":\"Capture ticket.reviewed_title\",\"new_bit_encoding\":\"UTF-8 normalized string\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_bit_level_data_flow\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"datum\":\"ticket_title\",\"source\":\"actor input title field\",\"source_kind\":\"original\",\"transformation\":\"identity\",\"target\":\"Capture ticket.ticket_title\",\"bit_encoding\":\"UTF-8 string\",\"new_datum\":\"ticket_title\",\"new_source\":\"reviewed title field\",\"new_source_kind\":\"modeled_target\",\"new_transformation\":\"identity\",\"new_target\":\"Capture ticket.reviewed_title\",\"new_bit_encoding\":\"UTF-8 normalized string\"}}}\n",
         )
     }
 
@@ -1812,7 +1812,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"ticket_title\",\"source\":\"actor input title field\",\"source_kind\":\"original\",\"transformation\":\"identity\",\"target\":\"Capture ticket.ticket_title\",\"bit_encoding\":\"UTF-8 string\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_bit_level_data_flow\",\"arguments\":{\"project_root\":\".\",\"slice\":\"capture-ticket\",\"datum\":\"ticket_title\",\"source\":\"actor input title field\",\"source_kind\":\"original\",\"transformation\":\"identity\",\"target\":\"Capture ticket.ticket_title\",\"bit_encoding\":\"UTF-8 string\"}}}\n",
         )
     }
 
@@ -1822,7 +1822,7 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             format_args!(
-                "{{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{{\"name\":\"resolve_conflict\",\"arguments\":{{\"id\":\"{stream_id}\",\"choose_event\":\"{branch_tx}\"}}}}}}"
+                "{{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{{\"name\":\"resolve_conflict\",\"arguments\":{{\"project_root\":\".\",\"id\":\"{stream_id}\",\"choose_event\":\"{branch_tx}\"}}}}}}"
             )
         )
     }
@@ -2508,7 +2508,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"check_project\",\"arguments\":{}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"check_project\",\"arguments\":{\"project_root\":\".\"}}}\n",
         )
     }
 

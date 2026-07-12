@@ -337,7 +337,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_slice\",\"arguments\":{\"slug\":\"capture-ticket\",\"description\":\"Actor enters repair ticket details and priority.\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_slice\",\"arguments\":{\"project_root\":\".\",\"slug\":\"capture-ticket\",\"description\":\"Actor enters repair ticket details and priority.\"}}}\n",
         )
     }
 
@@ -345,7 +345,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_slice_kind\",\"arguments\":{\"slug\":\"capture-ticket\",\"type\":\"automation\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_slice_kind\",\"arguments\":{\"project_root\":\".\",\"slug\":\"capture-ticket\",\"type\":\"automation\"}}}\n",
         )
     }
 
@@ -353,7 +353,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_slice_name\",\"arguments\":{\"slug\":\"capture-ticket\",\"name\":\"Capture repair ticket\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_slice_name\",\"arguments\":{\"project_root\":\".\",\"slug\":\"capture-ticket\",\"name\":\"Capture repair ticket\"}}}\n",
         )
     }
 
@@ -361,7 +361,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_slice\",\"arguments\":{\"slug\":\"capture-ticket\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_slice\",\"arguments\":{\"project_root\":\".\",\"slug\":\"capture-ticket\"}}}\n",
         )
     }
 }

@@ -4,6 +4,7 @@
 mod tests {
     use std::error::Error;
     use std::fs::read_to_string;
+    use std::path::Path;
 
     use assert_cmd::Command;
     use predicates::prelude::predicate;
@@ -22,7 +23,7 @@ mod tests {
         Command::cargo_bin("emc")?
             .args(["mcp", "stdio"])
             .current_dir(temp_dir.path())
-            .write_stdin(mcp_requests())
+            .write_stdin(mcp_requests(&temp_dir.path().canonicalize()?))
             .assert()
             .success()
             .stdout(predicate::str::contains("\"add_workflow\""))
@@ -43,11 +44,12 @@ mod tests {
         Ok(())
     }
 
-    fn mcp_requests() -> &'static str {
+    fn mcp_requests(project_root: &Path) -> String {
         concat!(
-            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow\",\"arguments\":{\"slug\":\"open-ticket\",\"name\":\"Open ticket\",\"description\":\"Actor opens a repair ticket.\"}}}\n",
-        )
+                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+                "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+                "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow\",\"arguments\":{\"slug\":\"open-ticket\",\"name\":\"Open ticket\",\"description\":\"Actor opens a repair ticket.\",\"project_root\":\"__PROJECT_ROOT__\"}}}\n",
+            )
+        .replace("__PROJECT_ROOT__", &project_root.display().to_string())
     }
 }

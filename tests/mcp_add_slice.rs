@@ -139,7 +139,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_slice\",\"arguments\":{\"workflow\":\"open-ticket\",\"slug\":\"capture-ticket\",\"name\":\"Capture ticket\",\"type\":\"state_view\",\"description\":\"Actor enters repair ticket details.\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_slice\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"slug\":\"capture-ticket\",\"name\":\"Capture ticket\",\"type\":\"state_view\",\"description\":\"Actor enters repair ticket details.\"}}}\n",
         )
     }
 
@@ -147,7 +147,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"show_slice\",\"arguments\":{\"slug\":\"capture-ticket\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"show_slice\",\"arguments\":{\"project_root\":\".\",\"slug\":\"capture-ticket\"}}}\n",
         )
     }
 }

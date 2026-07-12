@@ -249,6 +249,46 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn mcp_http_rejects_unattested_mutations_before_writing() -> Result<(), Box<dyn Error>> {
+        let _guard = mcp_http_test_lock()?;
+        let temp_dir = TempDir::new()?;
+        let port = available_loopback_port()?;
+        let server = ProcessCommand::new(cargo_bin("emc"))
+            .args([
+                "mcp",
+                "http",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                &port.to_string(),
+                "--once",
+            ])
+            .current_dir(temp_dir.path())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        let response = send_request_body(
+            port,
+            "127.0.0.1",
+            None,
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow\",\"arguments\":{\"slug\":\"open-ticket\",\"name\":\"Open ticket\",\"description\":\"Actor opens a repair ticket.\"}}}",
+        )?;
+        let output = server.wait_with_output()?;
+
+        assert!(output.status.success());
+        assert!(String::from_utf8(output.stderr)?.is_empty());
+        assert!(predicate::str::contains("HTTP/1.1 200 OK").eval(&response));
+        assert!(predicate::str::contains("add_workflow requires project_root").eval(&response));
+        assert!(
+            !temp_dir.path().join("model/lean/OpenTicket.lean").exists(),
+            "an unattested HTTP mutation must not write a workflow artifact"
+        );
+
+        Ok(())
+    }
+
     fn mcp_http_test_lock() -> Result<MutexGuard<'static, ()>, Box<dyn Error>> {
         MCP_HTTP_TEST_LOCK
             .lock()

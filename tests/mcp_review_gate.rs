@@ -138,7 +138,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"review_gate\",\"arguments\":{\"workflow\":\"open-ticket\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"review_gate\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\"}}}\n",
         )
     }
 
@@ -146,7 +146,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"record_clean_review\",\"arguments\":{\"workflow\":\"open-ticket\",\"reviewer\":\"event-model-reviewer\",\"reviewed_at\":\"2026-06-03T00:00:00.000Z\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"record_clean_review\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"reviewer\":\"event-model-reviewer\",\"reviewed_at\":\"2026-06-03T00:00:00.000Z\"}}}\n",
         )
     }
 

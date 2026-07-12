@@ -1,8 +1,12 @@
 // Copyright 2026 John Wilger
 
+use std::env;
 use std::fmt::Display;
+use std::fs;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use emc::modeling_process_guide;
 use rmcp::model::{
@@ -77,14 +81,15 @@ use crate::io::dto::{
     parse_workflow_transition_source_evidence_text, parse_workflow_transition_target_evidence_text,
     parse_workflow_view_role,
 };
-use crate::shell::{ShellError, interpret_collect_reports};
+use crate::shell::{ShellError, interpret_collect_reports, interpret_read_only_collect_reports};
 
 pub(crate) fn serve_stdio() -> Result<(), ShellError> {
+    let project_root = ProjectRoot::from_startup_directory()?;
     let stdin = io::stdin();
     stdin.lock().lines().try_for_each(|line| {
         let response = line
             .map_err(|error| ShellError::message(error.to_string()))
-            .and_then(|line| handle_input_line(&line))?;
+            .and_then(|line| handle_input_line(&line, &project_root))?;
         response.map_or(Ok(()), |response| write_response(&response))
     })
 }
@@ -95,6 +100,7 @@ pub(crate) fn serve_http(
     once: bool,
     auth_token: Option<&str>,
 ) -> Result<(), ShellError> {
+    let project_root = ProjectRoot::from_startup_directory()?;
     let auth_policy = auth_policy(host, auth_token)?;
     if auth_policy.is_required() && auth_token.is_none() {
         return Err(ShellError::message(
@@ -115,11 +121,11 @@ pub(crate) fn serve_http(
         let (stream, _address) = listener
             .accept()
             .map_err(|error| ShellError::message(error.to_string()))?;
-        handle_http_stream(stream, &authority, &auth_policy)
+        handle_http_stream(stream, &authority, &auth_policy, &project_root)
     } else {
         listener.incoming().try_for_each(|stream| {
             let stream = stream.map_err(|error| ShellError::message(error.to_string()))?;
-            handle_http_stream(stream, &authority, &auth_policy)
+            handle_http_stream(stream, &authority, &auth_policy, &project_root)
         })
     }
 }
@@ -153,14 +159,59 @@ impl AuthPolicy<'_> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProjectRoot(PathBuf);
+
+impl ProjectRoot {
+    fn from_startup_directory() -> Result<Self, ShellError> {
+        let startup_directory =
+            env::current_dir().map_err(|error| ShellError::message(error.to_string()))?;
+        Self::from_path(&startup_directory, "server startup project root")
+    }
+
+    fn from_attestation(value: &str) -> Result<Self, ShellError> {
+        Self::from_path(Path::new(value), "project_root")
+    }
+
+    fn from_path(path: &Path, label: &str) -> Result<Self, ShellError> {
+        fs::canonicalize(path).map(Self).map_err(|error| {
+            ShellError::message(format!("invalid {label} {}: {error}", path.display()))
+        })
+    }
+
+    fn require_attestation(&self, tool_name: &str, request: &Value) -> Result<(), ShellError> {
+        let supplied = request
+            .get("params")
+            .and_then(|params| params.get("arguments"))
+            .and_then(|arguments| arguments.get("project_root"))
+            .and_then(Value::as_str)
+            .ok_or_else(|| ShellError::message(format!("{tool_name} requires project_root")))?;
+        let supplied = Self::from_attestation(supplied)?;
+        if &supplied == self {
+            Ok(())
+        } else {
+            Err(ShellError::message(format!(
+                "{tool_name} project_root mismatch: expected {}, supplied {}",
+                self.display(),
+                supplied.display()
+            )))
+        }
+    }
+
+    fn display(&self) -> String {
+        self.0.display().to_string()
+    }
+}
+
 fn handle_http_stream(
     stream: TcpStream,
     authority: &str,
     auth_policy: &AuthPolicy<'_>,
+    project_root: &ProjectRoot,
 ) -> Result<(), ShellError> {
     let mut reader = BufReader::new(stream);
     let request = read_http_request(&mut reader)?;
-    let response = http_response_for_request(&request, authority, auth_policy)?;
+    let response = http_response_for_request(&request, authority, auth_policy, project_root)?;
     let mut stream = reader.into_inner();
     stream
         .write_all(response.as_bytes())
@@ -241,6 +292,7 @@ fn http_response_for_request(
     request: &HttpRequest,
     authority: &str,
     auth_policy: &AuthPolicy<'_>,
+    project_root: &ProjectRoot,
 ) -> Result<String, ShellError> {
     if request.path != "/mcp" {
         return Ok(http_response("404 Not Found", "{\"error\":\"not found\"}"));
@@ -283,7 +335,7 @@ fn http_response_for_request(
             ));
         }
     };
-    let response = handle_request(&mcp_request)?
+    let response = handle_request(&mcp_request, project_root)?
         .map(|response| serde_json::to_string(&response))
         .transpose()
         .map_err(|error| ShellError::message(error.to_string()))?
@@ -313,13 +365,16 @@ fn http_response(status: &str, body: &str) -> String {
     )
 }
 
-fn handle_input_line(line: &str) -> Result<Option<Value>, ShellError> {
+fn handle_input_line(line: &str, project_root: &ProjectRoot) -> Result<Option<Value>, ShellError> {
     let request = serde_json::from_str::<Value>(line)
         .map_err(|error| ShellError::message(format!("invalid MCP JSON-RPC message: {error}")))?;
-    handle_request(&request)
+    handle_request(&request, project_root)
 }
 
-fn handle_request(request: &Value) -> Result<Option<Value>, ShellError> {
+fn handle_request(
+    request: &Value,
+    project_root: &ProjectRoot,
+) -> Result<Option<Value>, ShellError> {
     let Some(id) = request.get("id") else {
         return Ok(None);
     };
@@ -327,7 +382,7 @@ fn handle_request(request: &Value) -> Result<Option<Value>, ShellError> {
     match request.get("method").and_then(Value::as_str) {
         Some("initialize") => Ok(Some(success_response(id, &initialize_result(request)?))),
         Some("tools/list") => Ok(Some(success_response(id, &tools_list_result()?))),
-        Some("tools/call") => tool_call_response(id, request),
+        Some("tools/call") => tool_call_response(id, request, project_root),
         Some(method) => Ok(Some(error_response(
             id,
             -32601,
@@ -377,7 +432,61 @@ fn tools_list_result() -> Result<Value, ShellError> {
     tools.extend(slice_structure_tools());
     tools.extend(slice_definition_tools());
     tools.extend(model_mutation_tools());
+    let tools = tools
+        .into_iter()
+        .map(with_project_root_requirement)
+        .collect();
     mcp_model_value(ListToolsResult::with_all_items(tools))
+}
+
+fn with_project_root_requirement(mut tool: Tool) -> Tool {
+    if is_unattested_read_only_tool(tool.name.as_ref()) {
+        return tool;
+    }
+
+    let schema = Arc::make_mut(&mut tool.input_schema);
+    let Some(properties) = schema
+        .entry("properties".to_owned())
+        .or_insert_with(|| json!({}))
+        .as_object_mut()
+    else {
+        unreachable!("EMC MCP tool schemas must expose object properties");
+    };
+    properties.insert(
+        "project_root".to_owned(),
+        json!({
+            "type": "string",
+            "description": "Canonical project root reported by project_context for this server."
+        }),
+    );
+    let Some(required) = schema
+        .entry("required".to_owned())
+        .or_insert_with(|| json!([]))
+        .as_array_mut()
+    else {
+        unreachable!("EMC MCP tool schemas must expose an array of required fields");
+    };
+    if !required.iter().any(|field| field == "project_root") {
+        required.push(Value::String("project_root".to_owned()));
+    }
+    tool
+}
+
+fn is_unattested_read_only_tool(name: &str) -> bool {
+    matches!(
+        name,
+        "list_workflows"
+            | "list_slices"
+            | "list_transitions"
+            | "list_conflicts"
+            | "list_modeling_enums"
+            | "get_modeling_guidance"
+            | "show_workflow"
+            | "show_slice"
+            | "check_project"
+            | "project_context"
+            | "review_gate"
+    )
 }
 
 fn project_lifecycle_tools() -> Vec<Tool> {
@@ -490,6 +599,15 @@ fn project_status_tools() -> Vec<Tool> {
         Tool::new(
             "check_project",
             "Check required project artifacts and generated model synchronization.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
+            "project_context",
+            "Return the canonical project root captured when this MCP server started.",
             schema_object(json!({
                     "type": "object",
                     "properties": {},
@@ -2646,7 +2764,11 @@ fn remove_transition_tool() -> Tool {
     clippy::unnecessary_wraps,
     reason = "return type mirrors the sibling arms of handle_request's match (which do return Err/None via ?), so the Result<Option<_>> shape is required for arm-type unification"
 )]
-fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, ShellError> {
+fn tool_call_response(
+    id: &Value,
+    request: &Value,
+    project_root: &ProjectRoot,
+) -> Result<Option<Value>, ShellError> {
     let Some(name) = request
         .get("params")
         .and_then(|params| params.get("name"))
@@ -2659,7 +2781,7 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
         )));
     };
 
-    match dispatch_tool_text(name, request) {
+    match dispatch_tool_text(name, request, project_root) {
         Some(result) => Ok(Some(tool_call_result_response(id, result))),
         None => Ok(Some(error_response(
             id,
@@ -2671,9 +2793,18 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
 
 /// Routes a tool name to its text-producing handler, returning `None` for
 /// unknown tools. Grouped by tool category so each sub-dispatcher stays small.
-fn dispatch_tool_text(name: &str, request: &Value) -> Option<Result<String, ShellError>> {
+fn dispatch_tool_text(
+    name: &str,
+    request: &Value,
+    project_root: &ProjectRoot,
+) -> Option<Result<String, ShellError>> {
+    if !is_unattested_read_only_tool(name)
+        && let Err(error) = project_root.require_attestation(name, request)
+    {
+        return Some(Err(error));
+    }
     query_tool_text(name, request)
-        .or_else(|| status_tool_text(name, request))
+        .or_else(|| status_tool_text(name, request, project_root))
         .or_else(|| workflow_evidence_tool_text(name, request))
         .or_else(|| slice_structure_tool_text(name, request))
         .or_else(|| slice_definition_tool_text(name, request))
@@ -2696,14 +2827,24 @@ fn query_tool_text(name: &str, request: &Value) -> Option<Result<String, ShellEr
     }
 }
 
-fn status_tool_text(name: &str, request: &Value) -> Option<Result<String, ShellError>> {
+fn status_tool_text(
+    name: &str,
+    request: &Value,
+    project_root: &ProjectRoot,
+) -> Option<Result<String, ShellError>> {
     match name {
         "check_project" => Some(check_project_tool_text()),
+        "project_context" => Some(project_context_tool_text(project_root)),
         "verify_project" => Some(verify_project_tool_text()),
         "review_gate" => Some(review_gate_tool_text(request)),
         "record_clean_review" => Some(record_clean_review_tool_text(request)),
         _ => None,
     }
+}
+
+fn project_context_tool_text(project_root: &ProjectRoot) -> Result<String, ShellError> {
+    serde_json::to_string_pretty(&json!({ "project_root": project_root.display() }))
+        .map_err(|error| ShellError::message(error.to_string()))
 }
 
 fn workflow_evidence_tool_text(name: &str, request: &Value) -> Option<Result<String, ShellError>> {
@@ -2843,19 +2984,22 @@ fn init_project_tool_text(request: &Value) -> Result<String, ShellError> {
 }
 
 fn list_workflows_tool_text() -> Result<String, ShellError> {
-    interpret_collect_reports(&command::list_workflows()).map(|reports| reports.join("\n"))
+    interpret_read_only_collect_reports(&command::list_workflows())
+        .map(|reports| reports.join("\n"))
 }
 
 fn list_slices_tool_text() -> Result<String, ShellError> {
-    interpret_collect_reports(&command::list_slices()).map(|reports| reports.join("\n"))
+    interpret_read_only_collect_reports(&command::list_slices()).map(|reports| reports.join("\n"))
 }
 
 fn list_transitions_tool_text() -> Result<String, ShellError> {
-    interpret_collect_reports(&command::list_transitions()).map(|reports| reports.join("\n"))
+    interpret_read_only_collect_reports(&command::list_transitions())
+        .map(|reports| reports.join("\n"))
 }
 
 fn list_conflicts_tool_text() -> Result<String, ShellError> {
-    interpret_collect_reports(&command::list_conflicts()).map(|reports| reports.join("\n"))
+    interpret_read_only_collect_reports(&command::list_conflicts())
+        .map(|reports| reports.join("\n"))
 }
 
 fn list_modeling_enums_tool_text() -> Result<String, ShellError> {
@@ -2919,7 +3063,8 @@ fn show_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
         .ok_or_else(|| ShellError::message("show_workflow requires slug"))?;
     let slug =
         parse_workflow_slug(raw_slug).map_err(|error| ShellError::message(error.to_string()))?;
-    interpret_collect_reports(&command::show_workflow(slug)).map(|reports| reports.join("\n"))
+    interpret_read_only_collect_reports(&command::show_workflow(slug))
+        .map(|reports| reports.join("\n"))
 }
 
 fn show_slice_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -2931,11 +3076,12 @@ fn show_slice_tool_text(request: &Value) -> Result<String, ShellError> {
         .ok_or_else(|| ShellError::message("show_slice requires slug"))?;
     let slug =
         parse_slice_slug(raw_slug).map_err(|error| ShellError::message(error.to_string()))?;
-    interpret_collect_reports(&command::show_slice(slug)).map(|reports| reports.join("\n"))
+    interpret_read_only_collect_reports(&command::show_slice(slug))
+        .map(|reports| reports.join("\n"))
 }
 
 fn check_project_tool_text() -> Result<String, ShellError> {
-    interpret_collect_reports(&command::check_project()).map(|reports| reports.join("\n"))
+    interpret_read_only_collect_reports(&command::check_project()).map(|reports| reports.join("\n"))
 }
 
 fn verify_project_tool_text() -> Result<String, ShellError> {
@@ -2953,7 +3099,7 @@ fn review_gate_tool_text(request: &Value) -> Result<String, ShellError> {
             parse_workflow_slug(raw_workflow)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-    interpret_collect_reports(&command::review_gate_for_workflow(workflow_slug))
+    interpret_read_only_collect_reports(&command::review_gate_for_workflow(workflow_slug))
         .map(|reports| reports.join("\n"))
 }
 

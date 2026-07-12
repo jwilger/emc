@@ -1496,7 +1496,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"connect_workflow\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_control\":\"review-ticket-screen\",\"target_view\":\"review-ticket-screen\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"connect_workflow\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_control\":\"review-ticket-screen\",\"target_view\":\"review-ticket-screen\"}}}\n",
         )
     }
 
@@ -1504,7 +1504,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_transition\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_control\":\"review-ticket-screen\",\"target_view\":\"review-ticket-screen\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_transition\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_control\":\"review-ticket-screen\",\"target_view\":\"review-ticket-screen\"}}}\n",
         )
     }
 
@@ -1512,7 +1512,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_transition\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"new_from\":\"capture-ticket\",\"new_to\":\"review-ticket\",\"new_via\":\"navigation\",\"new_name\":\"alternate-review-ticket-screen\",\"new_source_control\":\"alternate-review-ticket-screen\",\"new_target_view\":\"alternate-review-ticket-screen\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_transition\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"new_from\":\"capture-ticket\",\"new_to\":\"review-ticket\",\"new_via\":\"navigation\",\"new_name\":\"alternate-review-ticket-screen\",\"new_source_control\":\"alternate-review-ticket-screen\",\"new_target_view\":\"alternate-review-ticket-screen\"}}}\n",
         )
     }
 
@@ -1526,22 +1526,22 @@ mod tests {
     fn command_event_mcp_requests() -> &'static str {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"connect_workflow\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"submit-ticket\",\"via\":\"command\",\"name\":\"SubmitTicketForReview\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"connect_workflow\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"submit-ticket\",\"to\":\"review-ticket\",\"via\":\"event\",\"name\":\"TicketSubmittedForReview\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"connect_workflow\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"submit-ticket\",\"via\":\"command\",\"name\":\"SubmitTicketForReview\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"connect_workflow\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"from\":\"submit-ticket\",\"to\":\"review-ticket\",\"via\":\"event\",\"name\":\"TicketSubmittedForReview\"}}}\n",
         )
     }
 
     fn external_trigger_mcp_requests() -> &'static str {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"connect_workflow\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"record-callback\",\"via\":\"external_trigger\",\"name\":\"callback_received\",\"payload_contract\":\"CallbackReceivedPayload\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"connect_workflow\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"record-callback\",\"via\":\"external_trigger\",\"name\":\"callback_received\",\"payload_contract\":\"CallbackReceivedPayload\"}}}\n",
         )
     }
 
     fn workflow_exit_mcp_requests() -> &'static str {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"connect_workflow\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to_workflow\":\"repair-complete\",\"via\":\"outcome\",\"name\":\"ticket_closed\",\"reason\":\"Closed tickets continue to completion.\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"connect_workflow\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to_workflow\":\"repair-complete\",\"via\":\"outcome\",\"name\":\"ticket_closed\",\"reason\":\"Closed tickets continue to completion.\"}}}\n",
         )
     }
 
@@ -1549,7 +1549,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_outcome\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"label\":\"ticket_captured\",\"externally_relevant\":true}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_outcome\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"label\":\"ticket_captured\",\"externally_relevant\":true}}}\n",
         )
     }
 
@@ -1557,7 +1557,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_workflow_outcome\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"label\":\"ticket_captured\",\"externally_relevant\":true,\"new_source_slice\":\"capture-ticket\",\"new_label\":\"ticket_ready\",\"new_externally_relevant\":false}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_workflow_outcome\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"label\":\"ticket_captured\",\"externally_relevant\":true,\"new_source_slice\":\"capture-ticket\",\"new_label\":\"ticket_ready\",\"new_externally_relevant\":false}}}\n",
         )
     }
 
@@ -1565,7 +1565,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_workflow_outcome\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"label\":\"ticket_captured\",\"externally_relevant\":true}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_workflow_outcome\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"label\":\"ticket_captured\",\"externally_relevant\":true}}}\n",
         )
     }
 
@@ -1573,7 +1573,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_command_error\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"command\":\"CaptureTicket\",\"error\":\"DuplicateTicket\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_command_error\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"command\":\"CaptureTicket\",\"error\":\"DuplicateTicket\"}}}\n",
         )
     }
 
@@ -1581,7 +1581,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_workflow_command_error\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"command\":\"CaptureTicket\",\"error\":\"DuplicateTicket\",\"new_source_slice\":\"capture-ticket\",\"new_command\":\"SubmitTicket\",\"new_error\":\"TicketAlreadySubmitted\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_workflow_command_error\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"command\":\"CaptureTicket\",\"error\":\"DuplicateTicket\",\"new_source_slice\":\"capture-ticket\",\"new_command\":\"SubmitTicket\",\"new_error\":\"TicketAlreadySubmitted\"}}}\n",
         )
     }
 
@@ -1589,7 +1589,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_workflow_command_error\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"command\":\"CaptureTicket\",\"error\":\"DuplicateTicket\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_workflow_command_error\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"command\":\"CaptureTicket\",\"error\":\"DuplicateTicket\"}}}\n",
         )
     }
 
@@ -1597,9 +1597,9 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_owned_definition\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"command\",\"definition_name\":\"CaptureTicket\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_owned_definition\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"event\",\"definition_name\":\"TicketSubmitted\",\"definition_stream\":\"tickets\",\"source_provenance\":\"CaptureTicket command input\",\"event_participation\":\"emitted\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_owned_definition\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"view\",\"definition_name\":\"ticket-entry-screen\",\"view_role\":\"entry\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_owned_definition\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"command\",\"definition_name\":\"CaptureTicket\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_owned_definition\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"event\",\"definition_name\":\"TicketSubmitted\",\"definition_stream\":\"tickets\",\"source_provenance\":\"CaptureTicket command input\",\"event_participation\":\"emitted\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_owned_definition\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"view\",\"definition_name\":\"ticket-entry-screen\",\"view_role\":\"entry\"}}}\n",
         )
     }
 
@@ -1607,7 +1607,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_workflow_owned_definition\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"command\",\"definition_name\":\"CaptureTicket\",\"new_source_slice\":\"capture-ticket\",\"new_definition_kind\":\"command\",\"new_definition_name\":\"SubmitTicket\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_workflow_owned_definition\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"command\",\"definition_name\":\"CaptureTicket\",\"new_source_slice\":\"capture-ticket\",\"new_definition_kind\":\"command\",\"new_definition_name\":\"SubmitTicket\"}}}\n",
         )
     }
 
@@ -1615,21 +1615,21 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_workflow_owned_definition\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"command\",\"definition_name\":\"CaptureTicket\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_workflow_owned_definition\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"command\",\"definition_name\":\"CaptureTicket\"}}}\n",
         )
     }
 
     fn incomplete_event_participation_mcp_requests() -> &'static str {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_owned_definition\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"event\",\"definition_name\":\"TicketSubmitted\",\"event_participation\":\"emitted\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_owned_definition\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"event\",\"definition_name\":\"TicketSubmitted\",\"event_participation\":\"emitted\"}}}\n",
         )
     }
 
     fn non_view_role_mcp_requests() -> &'static str {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_owned_definition\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"command\",\"definition_name\":\"CaptureTicket\",\"view_role\":\"entry\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_owned_definition\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"command\",\"definition_name\":\"CaptureTicket\",\"view_role\":\"entry\"}}}\n",
         )
     }
 
@@ -1637,8 +1637,8 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"connect_workflow\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_control\":\"review-ticket-screen\",\"target_view\":\"review-ticket-screen\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_transition_evidence\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_control\":\"review-ticket-screen\",\"target_view\":\"review-ticket-screen\",\"source_evidence\":\"capture-ticket view owns the review-ticket-screen navigation control\",\"target_evidence\":\"review-ticket workflow step exposes review-ticket-screen as its entry view\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"connect_workflow\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_control\":\"review-ticket-screen\",\"target_view\":\"review-ticket-screen\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_transition_evidence\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_control\":\"review-ticket-screen\",\"target_view\":\"review-ticket-screen\",\"source_evidence\":\"capture-ticket view owns the review-ticket-screen navigation control\",\"target_evidence\":\"review-ticket workflow step exposes review-ticket-screen as its entry view\"}}}\n",
         )
     }
 
@@ -1646,7 +1646,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_workflow_transition_evidence\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_control\":\"review-ticket-screen\",\"target_view\":\"review-ticket-screen\",\"source_evidence\":\"capture-ticket view owns the review-ticket-screen navigation control\",\"target_evidence\":\"review-ticket workflow step exposes review-ticket-screen as its entry view\",\"new_from\":\"capture-ticket\",\"new_to\":\"review-ticket\",\"new_via\":\"navigation\",\"new_name\":\"review-ticket-screen\",\"new_source_control\":\"review-ticket-screen\",\"new_target_view\":\"review-ticket-screen\",\"new_source_evidence\":\"capture-ticket control is the modeled navigation source\",\"new_target_evidence\":\"review-ticket entry view is the modeled navigation target\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_workflow_transition_evidence\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_control\":\"review-ticket-screen\",\"target_view\":\"review-ticket-screen\",\"source_evidence\":\"capture-ticket view owns the review-ticket-screen navigation control\",\"target_evidence\":\"review-ticket workflow step exposes review-ticket-screen as its entry view\",\"new_from\":\"capture-ticket\",\"new_to\":\"review-ticket\",\"new_via\":\"navigation\",\"new_name\":\"review-ticket-screen\",\"new_source_control\":\"review-ticket-screen\",\"new_target_view\":\"review-ticket-screen\",\"new_source_evidence\":\"capture-ticket control is the modeled navigation source\",\"new_target_evidence\":\"review-ticket entry view is the modeled navigation target\"}}}\n",
         )
     }
 
@@ -1654,7 +1654,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_workflow_transition_evidence\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_control\":\"review-ticket-screen\",\"target_view\":\"review-ticket-screen\",\"source_evidence\":\"capture-ticket view owns the review-ticket-screen navigation control\",\"target_evidence\":\"review-ticket workflow step exposes review-ticket-screen as its entry view\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_workflow_transition_evidence\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_control\":\"review-ticket-screen\",\"target_view\":\"review-ticket-screen\",\"source_evidence\":\"capture-ticket view owns the review-ticket-screen navigation control\",\"target_evidence\":\"review-ticket workflow step exposes review-ticket-screen as its entry view\"}}}\n",
         )
     }
 
@@ -1662,12 +1662,12 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"require_workflow_entry_lifecycle_coverage\",\"arguments\":{\"workflow\":\"application-entry\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_entry_lifecycle_state\",\"arguments\":{\"workflow\":\"application-entry\",\"state\":\"fresh_uninitialized\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes first arrival before initialization\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_entry_lifecycle_state\",\"arguments\":{\"workflow\":\"application-entry\",\"state\":\"initialized_unauthenticated\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes initialized unauthenticated sessions\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_entry_lifecycle_state\",\"arguments\":{\"workflow\":\"application-entry\",\"state\":\"initialized_authenticated\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes initialized authenticated sessions\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_entry_lifecycle_state\",\"arguments\":{\"workflow\":\"application-entry\",\"state\":\"partially_configured\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes partially configured accounts\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_entry_lifecycle_state\",\"arguments\":{\"workflow\":\"application-entry\",\"state\":\"fully_configured\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes fully configured accounts\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"require_workflow_entry_lifecycle_coverage\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"application-entry\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_entry_lifecycle_state\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"application-entry\",\"state\":\"fresh_uninitialized\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes first arrival before initialization\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_entry_lifecycle_state\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"application-entry\",\"state\":\"initialized_unauthenticated\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes initialized unauthenticated sessions\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_entry_lifecycle_state\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"application-entry\",\"state\":\"initialized_authenticated\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes initialized authenticated sessions\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_entry_lifecycle_state\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"application-entry\",\"state\":\"partially_configured\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes partially configured accounts\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_entry_lifecycle_state\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"application-entry\",\"state\":\"fully_configured\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes fully configured accounts\"}}}\n",
         )
     }
 
@@ -1675,7 +1675,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_workflow_entry_lifecycle_state\",\"arguments\":{\"workflow\":\"application-entry\",\"state\":\"fresh_uninitialized\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes first arrival before initialization\",\"new_state\":\"fresh_uninitialized\",\"new_step\":\"entry-state\",\"new_evidence\":\"entry-state view confirms first-arrival routing\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_workflow_entry_lifecycle_state\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"application-entry\",\"state\":\"fresh_uninitialized\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes first arrival before initialization\",\"new_state\":\"fresh_uninitialized\",\"new_step\":\"entry-state\",\"new_evidence\":\"entry-state view confirms first-arrival routing\"}}}\n",
         )
     }
 
@@ -1683,8 +1683,8 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_workflow_entry_lifecycle_coverage\",\"arguments\":{\"workflow\":\"application-entry\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_workflow_entry_lifecycle_state\",\"arguments\":{\"workflow\":\"application-entry\",\"state\":\"fresh_uninitialized\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes first arrival before initialization\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_workflow_entry_lifecycle_coverage\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"application-entry\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_workflow_entry_lifecycle_state\",\"arguments\":{\"project_root\":\".\",\"workflow\":\"application-entry\",\"state\":\"fresh_uninitialized\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes first arrival before initialization\"}}}\n",
         )
     }
 }

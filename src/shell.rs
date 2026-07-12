@@ -288,6 +288,18 @@ fn project_initialization_plan(plan: &EffectPlan) -> bool {
     })
 }
 
+pub(crate) fn interpret_read_only_collect_reports(
+    plan: &EffectPlan,
+) -> Result<Vec<String>, ShellError> {
+    let _runtime_lock = lock_project_runtime_if_needed()?;
+    plan.effects()
+        .iter()
+        .try_fold(Vec::new(), |mut reports, effect| {
+            reports.extend(interpret_effect(effect)?);
+            Ok(reports)
+        })
+}
+
 struct ShellProjectRuntimeLock {
     _lock: ProjectRuntimeLock,
 }
@@ -2023,7 +2035,9 @@ fn interpret_listing_effect(effect: &Effect) -> Option<Result<Vec<String>, Shell
     Some(match effect {
         Effect::CheckCurrentProject => interpret_check_current_project(),
         Effect::ListConflictsFromEvents => {
-            interpret_collect_reports(&match list_event_conflicts().map_err(ShellError::message) {
+            interpret_read_only_collect_reports(&match list_event_conflicts()
+                .map_err(ShellError::message)
+            {
                 Ok(plan) => plan,
                 Err(error) => return Some(Err(error)),
             })
@@ -2035,7 +2049,7 @@ fn interpret_listing_effect(effect: &Effect) -> Option<Result<Vec<String>, Shell
                     Ok(graphs) => graphs,
                     Err(error) => return Some(Err(error)),
                 });
-            interpret_collect_reports(&list_slices(ModeledWorkflowSliceDetails::new(
+            interpret_read_only_collect_reports(&list_slices(ModeledWorkflowSliceDetails::new(
                 modeled_slices,
             )))
         }
@@ -2045,7 +2059,7 @@ fn interpret_listing_effect(effect: &Effect) -> Option<Result<Vec<String>, Shell
                     Ok(graphs) => graphs,
                     Err(error) => return Some(Err(error)),
                 });
-            interpret_collect_reports(&list_transitions(ModeledWorkflowTransitions::new(
+            interpret_read_only_collect_reports(&list_transitions(ModeledWorkflowTransitions::new(
                 modeled_transitions,
             )))
         }
@@ -2064,7 +2078,7 @@ fn interpret_check_current_project() -> Result<Vec<String>, ShellError> {
     // artifact. The artifact is a write-only projection; `check_project`
     // verifies the on-disk artifact matches these log-sourced rows.
     let project_inventories = projected_project_root_inventories().map_err(ShellError::message)?;
-    interpret_collect_reports(&check_project(
+    interpret_read_only_collect_reports(&check_project(
         &project_name,
         formal_workflows,
         &project_inventories,
@@ -2073,10 +2087,10 @@ fn interpret_check_current_project() -> Result<Vec<String>, ShellError> {
 
 fn interpret_list_workflows() -> Result<Vec<String>, ShellError> {
     let modeled_workflows = formal_workflow_layouts(read_synchronized_formal_workflow_graphs()?);
-    let mut reports = interpret_collect_reports(&list_workflows(ModeledWorkflowLayouts::new(
-        modeled_workflows,
-    )))?;
-    reports.extend(interpret_collect_reports(
+    let mut reports = interpret_read_only_collect_reports(&list_workflows(
+        ModeledWorkflowLayouts::new(modeled_workflows),
+    ))?;
+    reports.extend(interpret_read_only_collect_reports(
         &list_stale_workflow_readiness().map_err(ShellError::message)?,
     )?);
     Ok(reports)
@@ -2084,12 +2098,12 @@ fn interpret_list_workflows() -> Result<Vec<String>, ShellError> {
 
 fn interpret_show_slice(slug: &SliceSlug) -> Result<Vec<String>, ShellError> {
     let slice_document = read_formal_slice_artifacts(slug)?;
-    interpret_collect_reports(&show_document(slice_document))
+    interpret_read_only_collect_reports(&show_document(slice_document))
 }
 
 fn interpret_show_workflow(slug: &WorkflowSlug) -> Result<Vec<String>, ShellError> {
     let workflow_document = read_formal_workflow_artifacts(slug)?;
-    interpret_collect_reports(&show_workflow(workflow_document))
+    interpret_read_only_collect_reports(&show_workflow(workflow_document))
 }
 
 /// Artifact-precondition requirement effects. Returns `None` for effects
