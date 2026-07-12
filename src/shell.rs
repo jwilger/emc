@@ -145,12 +145,17 @@ pub(crate) fn interpret_collect_reports(plan: &EffectPlan) -> Result<Vec<String>
         project_exported_events_into_worktree()?;
         reject_mutation_when_event_conflicts_exist(plan)?;
     }
-    plan.effects()
+    let reports = plan
+        .effects()
         .iter()
         .try_fold(Vec::new(), |mut reports, effect| {
             reports.extend(interpret_effect(effect)?);
             Ok(reports)
-        })
+        })?;
+    if plan.effects().iter().any(effect_is_mutation) {
+        project_exported_events_into_worktree()?;
+    }
+    Ok(reports)
 }
 
 fn interpret_collect_reports_with_progress(
@@ -166,12 +171,17 @@ fn interpret_collect_reports_with_progress(
         project_exported_events_into_worktree()?;
         reject_mutation_when_event_conflicts_exist(plan)?;
     }
-    plan.effects()
+    let reports = plan
+        .effects()
         .iter()
         .try_fold(Vec::new(), |mut reports, effect| {
             reports.extend(interpret_effect_with_progress(effect, report)?);
             Ok(reports)
-        })
+        })?;
+    if plan.effects().iter().any(effect_is_mutation) {
+        project_exported_events_into_worktree()?;
+    }
+    Ok(reports)
 }
 
 fn interpret_effect_with_progress(
