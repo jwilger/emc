@@ -7,6 +7,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.14](https://github.com/jwilger/emc/compare/v0.1.13...v0.1.14) - 2026-07-12
+
+### Fixed
+
+- target generated release commit
+- fetch release baseline in versioning probe
+- use release automation credentials for recovered tags
+- authenticate recovered release tags
+- retain release completion helper
+- complete interrupted published releases
+- authorize release tag publication
+- publish recovered generated releases
+
+### Other
+
+- add tiber mcp servers
+- add emc and tiber mcp servers
+- gate long versioning probe after lint
+- scope Tiber to EMC
+
 ## [0.1.13](https://github.com/jwilger/emc/compare/v0.1.12...v0.1.13) - 2026-07-11
 
 ### Fixed
