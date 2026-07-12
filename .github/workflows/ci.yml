@@ -57,6 +57,9 @@ jobs:
     needs: lint
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -80,6 +83,9 @@ jobs:
     needs: lint
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -106,6 +112,9 @@ jobs:
     needs: lint
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -132,6 +141,7 @@ jobs:
     permissions:
       contents: write
       issues: write
+      id-token: write
     concurrency:
       group: release-${{ github.ref }}
       cancel-in-progress: false
