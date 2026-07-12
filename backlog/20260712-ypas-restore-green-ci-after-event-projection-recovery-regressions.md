@@ -18,6 +18,7 @@ GitHub Actions run 29195216187 passed lint, release versioning, and Nix flake ch
 ## Acceptance criteria
 
 - [ ] `emc check` rebuilds missing project, generated-model, and review artifacts from a populated event store and succeeds.
+- [ ] Artifact-only projects without a populated event store still report the pre-release upgrade error before generated-artifact drift errors.
 
 ## Subtasks
 
