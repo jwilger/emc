@@ -80,7 +80,7 @@ use crate::io::dto::{
     parse_workflow_transition_target_evidence_text, parse_workflow_view_role,
 };
 use crate::mcp::{serve_http, serve_stdio};
-use crate::shell::{ShellError, interpret};
+use crate::shell::{ShellError, interpret, interpret_read_only};
 
 struct Cli {
     command: Command,
@@ -293,6 +293,7 @@ enum Command {
         outcome: WorkflowOutcomeRecord,
     },
     Check,
+    Sync,
     ConnectWorkflow {
         connection: WorkflowConnection,
     },
@@ -603,7 +604,8 @@ fn run_workflow_outcome_commands(command: Command) -> Result<(), ShellError> {
 
 fn run_query_commands(command: Command) -> Result<(), ShellError> {
     match command {
-        Command::Check => interpret(&command::check_project()),
+        Command::Check => interpret_read_only(&command::check_project()),
+        Command::Sync => interpret(&command::sync_project()),
         Command::ConnectWorkflow { connection } => {
             interpret(&command::connect_workflow(connection))
         }
@@ -5335,6 +5337,9 @@ fn parse_cli_45(arguments: &[String]) -> Result<Cli, ShellError> {
         [command] if command == "check" => Ok(Cli {
             command: Command::Check,
         }),
+        [command] if command == "sync" => Ok(Cli {
+            command: Command::Sync,
+        }),
         [
             command,
             subject,
@@ -6564,7 +6569,13 @@ fn help_command() -> ClapCommand {
         .subcommand(help_remove_subcommand())
         .subcommand(help_connect_subcommand())
         .subcommand(ClapCommand::new("verify").about("Run Lean4 and Quint verification"))
-        .subcommand(ClapCommand::new("check").about("Check project artifact synchronization"))
+        .subcommand(
+            ClapCommand::new("check")
+                .about("Validate project artifact synchronization without writing"),
+        )
+        .subcommand(
+            ClapCommand::new("sync").about("Regenerate project artifacts from the event log"),
+        )
         .subcommand(help_gherkin_subcommand())
         .subcommand(help_review_subcommand())
         .subcommand(help_mcp_subcommand());

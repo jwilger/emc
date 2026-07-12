@@ -73,6 +73,36 @@ mod tests {
     }
 
     #[test]
+    fn mcp_stdio_sync_project_repairs_drift_after_root_attestation() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let root_artifact = temp_dir.path().join("model/lean/RepairDesk.lean");
+        write(&root_artifact, "corrupt generated project root\n")?;
+        let project_root = temp_dir.path().canonicalize()?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(sync_project_request(&project_root))
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("project layout is complete"));
+
+        assert!(
+            read_to_string(&root_artifact)?.contains("namespace RepairDesk"),
+            "sync_project must regenerate the artifact after a matching root attestation"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_stdio_rejects_a_mutation_attested_to_another_project_root() -> Result<(), Box<dyn Error>>
     {
         let server_project = TempDir::new()?;
@@ -198,6 +228,14 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"check_project\",\"arguments\":{}}}\n",
         )
+    }
+
+    fn sync_project_request(project_root: &Path) -> String {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"sync_project\",\"arguments\":{\"project_root\":\"__PROJECT_ROOT__\"}}}\n",
+        )
+        .replace("__PROJECT_ROOT__", &project_root.display().to_string())
     }
 
     fn mismatched_project_root_request(project_root: &Path) -> String {

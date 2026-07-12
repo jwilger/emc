@@ -14,6 +14,11 @@ parsed back**. Inc 1 (PR #140) already delivered the runtime correctness:
 - Artifacts **self-heal**: every command regenerates them from the log, so on-disk
   drift / deletion cannot persist.
 
+> Superseded by the explicit projection synchronization workflow: successful
+> authoring mutations still regenerate artifacts, but `emc check` and MCP
+> `check_project` are validation-only. Use `emc sync` or MCP `sync_project` to
+> repair drift or recreate missing projections.
+
 What is *not* yet literal: the regeneration **mechanism** still parses artifacts.
 
 ## Why the remaining work is large (corrected understanding)
@@ -148,9 +153,11 @@ in one shot from the event log:
   `modelDataFlowCount`, and the `modelDigest` (recomputed with the full inventories
   from `project_root_inventories_from_slices`). No `read_*_artifact`, no parse.
 
-So every entrypoint that regenerates artifacts (the self-heal that runs on `check`,
-`list`, `verify`, and as the pre-step of every command) is now a pure function of
-the log. Verified: `check_project` (15) green, rich-model `emc check` green;
+So every entrypoint that regenerated artifacts (the self-heal that ran on `check`,
+`list`, `verify`, and as the pre-step of every command) was a pure function of
+the log. The current workflow retains that pure projection for successful
+authoring mutations and explicit `sync`, while `check` is validation-only.
+Verified: `check_project` (15) green, rich-model `emc check` green;
 `add_formal_slice_facts` (50) is the byte-parity gate.
 
 Remaining for full purity (Increment 3): the **live mutating commands**

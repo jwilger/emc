@@ -443,6 +443,10 @@ pub(crate) fn check_project() -> EffectPlan {
     EffectPlan::new(vec![Effect::CheckCurrentProject])
 }
 
+pub(crate) fn sync_project() -> EffectPlan {
+    EffectPlan::new(vec![Effect::SynchronizeCurrentProject])
+}
+
 pub(crate) fn connect_workflow(connection: WorkflowConnection) -> EffectPlan {
     EffectPlan::new(vec![Effect::ConnectWorkflowFromWorkflow(connection)])
 }

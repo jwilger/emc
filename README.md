@@ -163,6 +163,13 @@ Check synchronized formal artifacts:
 emc check
 ```
 
+Regenerate artifacts from the event log when `check` reports drift or missing
+files:
+
+```sh
+emc sync
+```
+
 Run Lean4/Lake and Quint verification:
 
 ```sh
@@ -199,8 +206,9 @@ EMC-managed model artifacts live under `model/lean` and `model/quint`.
 Mutating project, workflow, slice, slice-fact, conflict-resolution, and
 clean-review operations append domain events to the eventcore-fs store at
 `model/events`, committed as immutable JSONL transactions under
-`model/events/events/`. `emc check` can rebuild `emc.toml`, generated Lean4 and
-Quint artifacts, and review records from that event history. The projection
+`model/events/events/`. `emc check` validates that `emc.toml`, generated Lean4
+and Quint artifacts, and review records match that event history without
+writing. `emc sync` explicitly rebuilds those projections. The projection
 fingerprint records the event set used for the latest rebuild.
 
 `emc verify` runs Lean4/Lake and Quint against the current projected event
@@ -211,9 +219,10 @@ optional review event reference. If the exported event frontier changes during
 verification, readiness is not appended and `emc verify` must be retried.
 
 The eventcore-fs store at `model/events` is the single source of truth: its
-committed `events/` JSONL transactions are the authoritative event log, and EMC
-regenerates the Lean4 and Quint artifacts from that log on every command, so the
-artifacts are write-only projections. eventcore-fs keeps its own operational
+committed `events/` JSONL transactions are the authoritative event log. EMC
+regenerates Lean4 and Quint artifacts after successful authoring mutations and
+when `emc sync` is explicitly run; `emc check` is validation-only. The artifacts
+remain write-only projections. eventcore-fs keeps its own operational
 `index/`, `tmp/`, `.eventcore/`, and lock files, which it gitignores.
 
 ## CLI commands
@@ -247,6 +256,7 @@ emc resolve conflict --id <conflict-id> --choose-event <event-id>
 emc review gate --workflow <workflow-slug>
 emc review record --workflow <workflow-slug> --reviewer <reviewer-id> --reviewed-at <timestamp>
 emc check
+emc sync
 emc verify
 emc gherkin list --suite <suite>
 emc gherkin run --suite <suite>
@@ -289,6 +299,7 @@ list_transitions
 show_workflow
 show_slice
 check_project
+sync_project
 verify_project
 review_gate
 record_clean_review
@@ -313,7 +324,8 @@ requested model element.
 ## Checking and Verification
 
 - `emc check`: confirms project files and generated Lean4/Quint artifacts are
-  present, canonical, and synchronized.
+  present, canonical, and synchronized without changing them.
+- `emc sync`: regenerates project artifacts from the authoritative event log.
 - `emc verify`: runs the generated Lean4/Lake and Quint verification entry
   points.
 

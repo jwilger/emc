@@ -1397,6 +1397,7 @@ pub(crate) enum Effect {
     UpdateWorkflowEntryLifecycleStateFromWorkflow(WorkflowEntryLifecycleStateUpdateEffect),
     RemoveWorkflowEntryLifecycleStateFromWorkflow(WorkflowEntryLifecycleStateRemovalEffect),
     CheckCurrentProject,
+    SynchronizeCurrentProject,
     ConnectWorkflowFromWorkflow(WorkflowConnection),
     UpdateTransitionFromWorkflow(WorkflowTransitionUpdate),
     EnsureDirectory(ProjectPath),

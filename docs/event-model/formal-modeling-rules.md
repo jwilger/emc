@@ -40,6 +40,13 @@ A model is complete and valid only when all of these are true:
 - ✅ Non-formal implementation code does not perform duplicate semantic
   validation for correctness.
 
+## Projection Operational Integrity
+
+- 🟡 `emc sync` regenerates Lean4 and Quint projections from the authoritative
+  event log, while `emc check` detects drift without modifying project files.
+  This operational boundary is behavior-tested, but it is not itself a
+  Lean4/Quint semantic rule enforced through formal verification.
+
 ## Model Structure
 
 - ✅ Model structure is explicit: name, version, streams, events, commands, read

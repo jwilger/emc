@@ -51,7 +51,8 @@ mod tests {
     }
 
     #[test]
-    fn check_repairs_project_root_digest_drift_from_events() -> Result<(), Box<dyn Error>> {
+    fn check_reports_project_root_digest_drift_without_rewriting_it() -> Result<(), Box<dyn Error>>
+    {
         let temp_dir = TempDir::new()?;
 
         Command::cargo_bin("emc")?
@@ -83,35 +84,23 @@ mod tests {
         } else {
             "0".repeat(64)
         };
-        write(
-            &lean_root_path,
-            lean_root.replace(current_digest, &stale_digest),
-        )?;
+        let drifted_root = lean_root.replace(current_digest, &stale_digest);
+        write(&lean_root_path, &drifted_root)?;
 
         Command::cargo_bin("emc")?
             .arg("check")
             .current_dir(temp_dir.path())
             .assert()
-            .success()
-            .stdout(predicate::str::contains("project layout is complete"));
+            .failure()
+            .stderr(predicate::str::contains("Lean project root drift"));
 
-        let repaired_root = read_to_string(&lean_root_path)?;
-        assert!(
-            repaired_root.contains(current_digest),
-            "check must repair generated project root digest drift from exported events"
-        );
+        assert_eq!(read_to_string(&lean_root_path)?, drifted_root);
 
         Ok(())
     }
 
-    // The Lean/Quint artifacts are write-only projections of the event log.
-    // Drift (a hand edit, a bad merge, a partial write) and missing artifacts
-    // are self-healed: the next command regenerates the affected artifacts from
-    // the authoritative log, so `check` restores them and succeeds rather than
-    // reporting drift. These tests pin that healing behavior.
-
     #[test]
-    fn check_heals_corrupted_lean_workflow_artifact_from_events() -> Result<(), Box<dyn Error>> {
+    fn sync_repairs_corrupted_artifacts_after_check_reports_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_connected_workflow(&temp_dir)?;
 
@@ -120,6 +109,24 @@ mod tests {
             &path,
             "namespace OpenTicket\n-- corrupted\nend OpenTicket\n",
         )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("Lean workflow field drift"));
+
+        assert_eq!(
+            read_to_string(&path)?,
+            "namespace OpenTicket\n-- corrupted\nend OpenTicket\n"
+        );
+
+        Command::cargo_bin("emc")?
+            .arg("sync")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
 
         Command::cargo_bin("emc")?
             .arg("check")
@@ -134,89 +141,14 @@ mod tests {
                 && healed.contains(
                     "def workflowSlices : List WorkflowSlice := [{ slug := \"capture-ticket\" },{ slug := \"review-ticket\" }]"
                 ),
-            "check must regenerate the corrupted Lean workflow artifact from the event log"
+            "sync must regenerate the corrupted Lean workflow artifact from the event log"
         );
 
         Ok(())
     }
 
     #[test]
-    fn check_heals_corrupted_quint_workflow_artifact_from_events() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-        create_connected_workflow(&temp_dir)?;
-
-        let path = temp_dir.path().join("model/quint/OpenTicket.qnt");
-        write(&path, "module OpenTicket {\n// corrupted\n}\n")?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains("project layout is complete"));
-
-        let healed = read_to_string(&path)?;
-        assert!(
-            healed.contains("val workflowName = \"Open ticket\""),
-            "check must regenerate the corrupted Quint workflow artifact from the event log"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_heals_corrupted_lean_slice_artifact_from_events() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-        create_connected_workflow(&temp_dir)?;
-
-        let path = temp_dir.path().join("model/lean/slices/CaptureTicket.lean");
-        write(
-            &path,
-            "namespace CaptureTicket\n-- corrupted\nend CaptureTicket\n",
-        )?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains("project layout is complete"));
-
-        let healed = read_to_string(&path)?;
-        assert!(
-            healed.contains("def sliceName := \"Capture ticket\""),
-            "check must regenerate the corrupted Lean slice artifact from the event log"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_heals_corrupted_quint_slice_artifact_from_events() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-        create_connected_workflow(&temp_dir)?;
-
-        let path = temp_dir.path().join("model/quint/slices/CaptureTicket.qnt");
-        write(&path, "module CaptureTicket {\n// corrupted\n}\n")?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains("project layout is complete"));
-
-        let healed = read_to_string(&path)?;
-        assert!(
-            healed.contains("val sliceName = \"Capture ticket\""),
-            "check must regenerate the corrupted Quint slice artifact from the event log"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_restores_a_deleted_workflow_artifact_from_events() -> Result<(), Box<dyn Error>> {
+    fn check_reports_missing_artifacts_without_creating_them() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_connected_workflow(&temp_dir)?;
 
@@ -229,35 +161,11 @@ mod tests {
             .arg("check")
             .current_dir(temp_dir.path())
             .assert()
-            .success()
-            .stdout(predicate::str::contains("project layout is complete"));
+            .failure();
 
         assert!(
-            exists(&lean_path)? && exists(&quint_path)?,
-            "check must restore deleted workflow artifacts from the event log"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_restores_a_deleted_project_manifest_from_events() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-        create_connected_workflow(&temp_dir)?;
-
-        let manifest = temp_dir.path().join("emc.toml");
-        remove_file(&manifest)?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains("project layout is complete"));
-
-        assert!(
-            exists(&manifest)?,
-            "check must restore the deleted project manifest from the event log"
+            !exists(&lean_path)? && !exists(&quint_path)?,
+            "check must not create missing workflow artifacts"
         );
 
         Ok(())

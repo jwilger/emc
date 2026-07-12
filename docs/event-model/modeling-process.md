@@ -240,7 +240,8 @@ the data and contract model.
 
 ### Phase 10: Review, Check, Verify, And Record Readiness
 
-Run `emc check` to prove generated artifacts match the event history. Run
+Run `emc sync` to regenerate artifacts from the event history, then `emc check`
+to prove the generated artifacts match it. Run
 `emc verify` to prove Lean4 and Quint accept the current model. Then perform a
 structured review against the workflow's review gate and record a clean review
 when the model is ready.
@@ -262,7 +263,8 @@ fact was incomplete or inaccurate. Use remove operations when the concept is no
 longer part of the model. Use replacement only when the identity itself is
 wrong and keeping history under the old identity would mislead future readers.
 
-After every meaningful edit or removal, regenerate, check, verify, and refresh
+After every meaningful edit or removal, run `emc sync` when regeneration is
+needed, then check, verify, and refresh
 review evidence as needed.
 
 ## Element Modeling Guidance

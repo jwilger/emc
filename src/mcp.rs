@@ -606,6 +606,15 @@ fn project_status_tools() -> Vec<Tool> {
             })),
         ),
         Tool::new(
+            "sync_project",
+            "Regenerate project artifacts from the authoritative event log.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
             "project_context",
             "Return the canonical project root captured when this MCP server started.",
             schema_object(json!({
@@ -2834,6 +2843,7 @@ fn status_tool_text(
 ) -> Option<Result<String, ShellError>> {
     match name {
         "check_project" => Some(check_project_tool_text()),
+        "sync_project" => Some(sync_project_tool_text()),
         "project_context" => Some(project_context_tool_text(project_root)),
         "verify_project" => Some(verify_project_tool_text()),
         "review_gate" => Some(review_gate_tool_text(request)),
@@ -3082,6 +3092,10 @@ fn show_slice_tool_text(request: &Value) -> Result<String, ShellError> {
 
 fn check_project_tool_text() -> Result<String, ShellError> {
     interpret_read_only_collect_reports(&command::check_project()).map(|reports| reports.join("\n"))
+}
+
+fn sync_project_tool_text() -> Result<String, ShellError> {
+    interpret_collect_reports(&command::sync_project()).map(|reports| reports.join("\n"))
 }
 
 fn verify_project_tool_text() -> Result<String, ShellError> {

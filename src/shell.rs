@@ -127,6 +127,14 @@ pub(crate) fn interpret(plan: &EffectPlan) -> Result<(), ShellError> {
     interpret_collect_reports_with_progress(plan, &mut |report| println!("{report}")).map(|_| ())
 }
 
+pub(crate) fn interpret_read_only(plan: &EffectPlan) -> Result<(), ShellError> {
+    interpret_read_only_collect_reports(plan).map(|reports| {
+        for report in reports {
+            println!("{report}");
+        }
+    })
+}
+
 pub(crate) fn interpret_collect_reports(plan: &EffectPlan) -> Result<Vec<String>, ShellError> {
     let runtime_lock = lock_project_runtime_if_needed()?;
     if runtime_lock.is_some() {
@@ -415,12 +423,11 @@ fn effect_is_mutation(effect: &Effect) -> bool {
 }
 
 fn project_exported_events_into_worktree() -> Result<(), ShellError> {
-    // Regenerate the Lean/Quint artifacts from the authoritative event log on
-    // every command. The artifacts are write-only projections of the log: this
-    // self-heals any on-disk drift (a hand edit, a bad merge, a partial write)
-    // by restoring them to exactly what the log projects. `write_file` is
-    // idempotent, so when the artifacts already match the log nothing is
-    // rewritten.
+    // Regenerate the Lean/Quint artifacts from the authoritative event log for
+    // mutating command flows and explicit synchronization. The artifacts are
+    // write-only projections of the log: this self-heals on-disk drift (a hand
+    // edit, a bad merge, a partial write) by restoring exactly what the log
+    // projects. Validation-only commands use the read-only interpreter instead.
     let projecting = projecting_events_state();
     {
         let mut is_projecting = projecting
@@ -1867,9 +1874,7 @@ fn interpret_connect_workflow(connection: &WorkflowConnection) -> Result<Vec<Str
     )
     .map_err(|error| ShellError::message(error.to_string()))?;
     let reports = interpret_collect_reports(&plan)?;
-    interpret_effect(&Effect::ExportEvent(EventDraft::workflow_connected(
-        connection,
-    )))?;
+    export_and_regenerate(EventDraft::workflow_connected(connection))?;
     Ok(reports)
 }
 
@@ -1886,9 +1891,7 @@ fn interpret_update_transition(
     )
     .map_err(|error| ShellError::message(error.to_string()))?;
     let reports = interpret_collect_reports(&plan)?;
-    interpret_effect(&Effect::ExportEvent(
-        EventDraft::workflow_transition_updated(update),
-    ))?;
+    export_and_regenerate(EventDraft::workflow_transition_updated(update))?;
     Ok(reports)
 }
 
@@ -1923,9 +1926,7 @@ fn interpret_remove_transition(
     )
     .map_err(|error| ShellError::message(error.to_string()))?;
     let reports = interpret_collect_reports(&plan)?;
-    interpret_effect(&Effect::ExportEvent(
-        EventDraft::workflow_transition_removed(removal),
-    ))?;
+    export_and_regenerate(EventDraft::workflow_transition_removed(removal))?;
     Ok(reports)
 }
 
@@ -2034,6 +2035,7 @@ fn interpret_update_slice_name(effect: &SliceNameUpdateEffect) -> Result<Vec<Str
 fn interpret_listing_effect(effect: &Effect) -> Option<Result<Vec<String>, ShellError>> {
     Some(match effect {
         Effect::CheckCurrentProject => interpret_check_current_project(),
+        Effect::SynchronizeCurrentProject => interpret_synchronize_current_project(),
         Effect::ListConflictsFromEvents => {
             interpret_read_only_collect_reports(&match list_event_conflicts()
                 .map_err(ShellError::message)
@@ -2251,6 +2253,11 @@ fn interpret_export_event(draft: &EventDraft) -> Result<Vec<String>, ShellError>
     Ok(Vec::new())
 }
 
+fn interpret_synchronize_current_project() -> Result<Vec<String>, ShellError> {
+    project_exported_events_into_worktree()?;
+    interpret_check_current_project()
+}
+
 fn interpret_record_clean_review(effect: &CleanReviewEffect) -> Result<Vec<String>, ShellError> {
     let current_digest = formal_model_content_digest(effect.workflow_slug())?;
     let required_categories = required_review_categories();
@@ -2263,13 +2270,13 @@ fn interpret_record_clean_review(effect: &CleanReviewEffect) -> Result<Vec<Strin
     )
     .map_err(|error| ShellError::message(error.to_string()))?;
     let reports = interpret_collect_reports(&plan)?;
-    interpret_effect(&Effect::ExportEvent(EventDraft::review_recorded(
+    export_and_regenerate(EventDraft::review_recorded(
         effect.workflow_slug(),
         &current_digest,
         effect.reviewer_id(),
         effect.reviewed_at(),
         &required_categories,
-    )))?;
+    ))?;
     Ok(reports)
 }
 
